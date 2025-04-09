@@ -1200,11 +1200,11 @@ class Server:
 class AsyncIOServer:
     """An async gRPC server using asyncio."""
 
-    def __init__(self, *interceptors) -> None:
+    def __init__(self, *interceptors, port: int = 50051) -> None:
         self._server = grpc.aio.server(interceptors=interceptors)
         self._service_names = []
         self._package_name = ""
-        self._port = 50051
+        self.set_port(port)
 
     def set_package_name(self, package_name: str):
         """Set the package name for .proto generation."""
@@ -1255,10 +1255,12 @@ class AsyncIOServer:
         await self._server.start()
 
         shutdown_event = asyncio.Event()
+        loop = asyncio.get_running_loop()
 
         def shutdown(signum, frame):
             print("Received shutdown signal...")
             shutdown_event.set()
+            loop.call_soon_threadsafe(shutdown_event.set)
 
         for s in [signal.SIGTERM, signal.SIGINT]:
             signal.signal(s, shutdown)
