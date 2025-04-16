@@ -1259,7 +1259,6 @@ class AsyncIOServer:
 
         def shutdown(signum, frame):
             print("Received shutdown signal...")
-            shutdown_event.set()
             loop.call_soon_threadsafe(shutdown_event.set)
 
         for s in [signal.SIGTERM, signal.SIGINT]:
