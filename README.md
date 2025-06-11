@@ -163,11 +163,17 @@ class Greeter:
         return HelloReply(message=f"Hello, {request.name}!")
 
 
+async def main():
+    # You can specify a custom port (default is 50051)
+    server = AsyncIOServer(port=50052)
+    await server.run(Greeter())
+
+
 if __name__ == "__main__":
-    server = AsyncIOServer()
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(server.run(Greeter()))
+    asyncio.run(main())
 ```
+
+The AsyncIOServer automatically handles graceful shutdown on SIGTERM and SIGINT signals.
 
 ### 🌐 ASGI Application Example
 
