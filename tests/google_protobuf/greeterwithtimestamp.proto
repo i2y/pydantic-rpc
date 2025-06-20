@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package greeterwithtimestamp.v1;
+
+import "google/protobuf/timestamp.proto";
+
+service GreeterWithTimestamp {
+    rpc SayHello (WithTimestamp) returns (WithTimestamp);
+}
+
+message WithTimestamp {
+    google.protobuf.Timestamp timestamp = 1;
+}
+

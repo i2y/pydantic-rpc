@@ -1,5 +1,5 @@
-import annotated_types
 import asyncio
+import datetime
 import enum
 import importlib.util
 import inspect
@@ -8,33 +8,34 @@ import signal
 import sys
 import time
 import types
-import datetime
+from collections.abc import AsyncIterator
 from concurrent import futures
+from importlib import resources
 from posixpath import basename
 from typing import (
     Callable,
     Type,
+    TypeAlias,
+    Union,
     get_args,
     get_origin,
-    Union,
-    TypeAlias,
 )
-from collections.abc import AsyncIterator
 
+import annotated_types
 import grpc
-from grpc_health.v1 import health_pb2, health_pb2_grpc
-from grpc_health.v1.health import HealthServicer
-from grpc_reflection.v1alpha import reflection
-from grpc_tools import protoc
-from pydantic import BaseModel, ValidationError
-from sonora.wsgi import grpcWSGI
-from sonora.asgi import grpcASGI
 from connecpy.asgi import ConnecpyASGIApp as ConnecpyASGI
 from connecpy.errors import Errors
 from connecpy.wsgi import ConnecpyWSGIApp as ConnecpyWSGI
 
 # Protobuf Python modules for Timestamp, Duration (requires protobuf / grpcio)
-from google.protobuf import timestamp_pb2, duration_pb2
+from google.protobuf import duration_pb2, timestamp_pb2
+from grpc_health.v1 import health_pb2, health_pb2_grpc
+from grpc_health.v1.health import HealthServicer
+from grpc_reflection.v1alpha import reflection
+from grpc_tools import protoc
+from pydantic import BaseModel, ValidationError
+from sonora.asgi import grpcASGI
+from sonora.wsgi import grpcWSGI
 
 ###############################################################################
 # 1. Message definitions & converter extensions
@@ -44,6 +45,16 @@ from google.protobuf import timestamp_pb2, duration_pb2
 
 
 Message: TypeAlias = BaseModel
+
+
+def _get_resource_file_name(package_or_requirement: str, resource_name: str) -> str:
+    """Obtain the filename for a resource on the file system.
+
+    Borrowed from grpc_tools/protoc.py::_get_resource_file_name"""
+    return str((resources.files(package_or_requirement) / resource_name).resolve())
+
+
+_PROTO_INCLUDE = _get_resource_file_name("grpc_tools", "_proto")
 
 
 def primitiveProtoValueToPythonValue(value):
@@ -515,8 +526,8 @@ def python_value_to_proto(field_type: Type, value, pb2_module):
     """
     Perform Python->protobuf type conversion for each field value.
     """
-    import inspect
     import datetime
+    import inspect
 
     # If datetime
     if field_type == datetime.datetime:
@@ -944,7 +955,7 @@ def generate_grpc_code(proto_file, grpc_python_out) -> types.ModuleType | None:
     Execute the protoc command to generate Python gRPC code from the .proto file.
     Returns a tuple of (pb2_grpc_module, pb2_module) on success, or None if failed.
     """
-    command = f"-I. --grpc_python_out={grpc_python_out} {proto_file}"
+    command = f"dummy_protoc.py -I. --grpc_python_out={grpc_python_out} {proto_file} -I{_PROTO_INCLUDE}"
     exit_code = protoc.main(command.split())
     if exit_code != 0:
         return None
@@ -975,7 +986,7 @@ def generate_connecpy_code(
     Execute the protoc command to generate Python Connecpy code from the .proto file.
     Returns a tuple of (connecpy_module, pb2_module) on success, or None if failed.
     """
-    command = f"-I. --connecpy_out={connecpy_out} {proto_file}"
+    command = f"dummy_protoc.py -I. --connecpy_out={connecpy_out} {proto_file} -I{_PROTO_INCLUDE}"
     exit_code = protoc.main(command.split())
     if exit_code != 0:
         return None
@@ -1006,7 +1017,7 @@ def generate_pb_code(
     Execute the protoc command to generate Python gRPC code from the .proto file.
     Returns a tuple of (pb2_grpc_module, pb2_module) on success, or None if failed.
     """
-    command = f"-I. --python_out={python_out} --pyi_out={pyi_out} {proto_file}"
+    command = f"dummy_protoc.py -I. --python_out={python_out} --pyi_out={pyi_out} {proto_file} -I{_PROTO_INCLUDE}"
     exit_code = protoc.main(command.split())
     if exit_code != 0:
         return None
