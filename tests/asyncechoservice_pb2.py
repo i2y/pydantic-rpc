@@ -4,37 +4,34 @@
 # source: asyncechoservice.proto
 # Protobuf Python Version: 5.29.0
 """Generated protocol buffer code."""
+
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import descriptor_pool as _descriptor_pool
 from google.protobuf import runtime_version as _runtime_version
 from google.protobuf import symbol_database as _symbol_database
 from google.protobuf.internal import builder as _builder
+
 _runtime_version.ValidateProtobufRuntimeVersion(
-    _runtime_version.Domain.PUBLIC,
-    5,
-    29,
-    0,
-    '',
-    'asyncechoservice.proto'
+    _runtime_version.Domain.PUBLIC, 5, 29, 0, "", "asyncechoservice.proto"
 )
 # @@protoc_insertion_point(imports)
 
 _sym_db = _symbol_database.Default()
 
 
-
-
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x16\x61syncechoservice.proto\x12\x0c\x61syncecho.v1\"\x1c\n\x0c\x45\x63hoResponse\x12\x0c\n\x04text\x18\x01 \x01(\t\"\x1b\n\x0b\x45\x63hoRequest\x12\x0c\n\x04text\x18\x01 \x01(\t2Q\n\x10\x41syncEchoService\x12=\n\x04\x45\x63ho\x12\x19.asyncecho.v1.EchoRequest\x1a\x1a.asyncecho.v1.EchoResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
+    b'\n\x16\x61syncechoservice.proto\x12\x0c\x61syncecho.v1"\x1c\n\x0c\x45\x63hoResponse\x12\x0c\n\x04text\x18\x01 \x01(\t"\x1b\n\x0b\x45\x63hoRequest\x12\x0c\n\x04text\x18\x01 \x01(\t2Q\n\x10\x41syncEchoService\x12=\n\x04\x45\x63ho\x12\x19.asyncecho.v1.EchoRequest\x1a\x1a.asyncecho.v1.EchoResponseb\x06proto3'
+)
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
-_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'asyncechoservice_pb2', _globals)
+_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, "asyncechoservice_pb2", _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
-  DESCRIPTOR._loaded_options = None
-  _globals['_ECHORESPONSE']._serialized_start=40
-  _globals['_ECHORESPONSE']._serialized_end=68
-  _globals['_ECHOREQUEST']._serialized_start=70
-  _globals['_ECHOREQUEST']._serialized_end=97
-  _globals['_ASYNCECHOSERVICE']._serialized_start=99
-  _globals['_ASYNCECHOSERVICE']._serialized_end=180
+    DESCRIPTOR._loaded_options = None
+    _globals["_ECHORESPONSE"]._serialized_start = 40
+    _globals["_ECHORESPONSE"]._serialized_end = 68
+    _globals["_ECHOREQUEST"]._serialized_start = 70
+    _globals["_ECHOREQUEST"]._serialized_end = 97
+    _globals["_ASYNCECHOSERVICE"]._serialized_start = 99
+    _globals["_ASYNCECHOSERVICE"]._serialized_end = 180
 # @@protoc_insertion_point(module_scope)

@@ -1061,7 +1061,7 @@ def get_rpc_methods(obj: object) -> list[tuple[str, types.MethodType]]:
     return [
         (to_pascal_case(attr_name), getattr(obj, attr_name))
         for attr_name in dir(obj)
-        if not attr_name.startswith('_') and inspect.ismethod(getattr(obj, attr_name))
+        if not attr_name.startswith("_") and inspect.ismethod(getattr(obj, attr_name))
     ]
 
 

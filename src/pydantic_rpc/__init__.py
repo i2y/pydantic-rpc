@@ -21,6 +21,7 @@ __all__ = [
 # Optional MCP support
 try:
     from .mcp import MCPExporter
+
     __all__.append("MCPExporter")
 except ImportError:
     # MCP dependencies not installed

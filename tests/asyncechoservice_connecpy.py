@@ -20,7 +20,9 @@ _sym_db = symbol_database.Default()
 
 
 class AsyncEchoService(Protocol):
-    async def Echo(self, req: _pb2.EchoRequest, ctx: ServiceContext) -> _pb2.EchoResponse: ...
+    async def Echo(
+        self, req: _pb2.EchoRequest, ctx: ServiceContext
+    ) -> _pb2.EchoResponse: ...
 
 
 class AsyncEchoServiceServer(ConnecpyServer):
