@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package greeterwithduration.v1;
+
+import "google/protobuf/duration.proto";
+
+service GreeterWithDuration {
+    rpc SayHello (WithDuration) returns (WithDuration);
+}
+
+message WithDuration {
+    google.protobuf.Duration duration = 1;
+}
+

@@ -110,6 +110,7 @@ app.mount(OlympicsLocationAgent())
 - **For Connect-RPC:**
   - 🌐 **Connecpy Support:** Partially supports Connect-RPC via `Connecpy`.
 - 🛠️ **Pre-generated Protobuf Files and Code:** Pre-generate proto files and corresponding code via the CLI. By setting the environment variable (PYDANTIC_RPC_SKIP_GENERATION), you can skip runtime generation.
+- 🤖 **MCP (Model Context Protocol) Support:** Expose your services as tools for AI assistants using the official MCP SDK, supporting both stdio and HTTP/SSE transports.
 
 ## 📦 Installation
 
@@ -724,6 +725,74 @@ if __name__ == "__main__":
 
 TODO
 
+### 🤖 MCP (Model Context Protocol) Support
+
+PydanticRPC can expose your services as MCP tools for AI assistants using FastMCP. This enables seamless integration with any MCP-compatible client.
+
+#### Stdio Mode Example
+
+```python
+from pydantic_rpc import Message
+from pydantic_rpc.mcp import MCPExporter
+
+class CalculateRequest(Message):
+    expression: str
+
+class CalculateResponse(Message):
+    result: float
+
+class MathService:
+    def calculate(self, req: CalculateRequest) -> CalculateResponse:
+        result = eval(req.expression, {"__builtins__": {}}, {})
+        return CalculateResponse(result=float(result))
+
+# Run as MCP stdio server
+if __name__ == "__main__":
+    service = MathService()
+    mcp = MCPExporter(service)
+    mcp.run_stdio()
+```
+
+#### Configuring MCP Clients
+
+Any MCP-compatible client can connect to your service. For example, to configure Claude Desktop:
+
+```json
+{
+  "mcpServers": {
+    "my-math-service": {
+      "command": "python",
+      "args": ["/path/to/math_mcp_server.py"]
+    }
+  }
+}
+```
+
+#### HTTP/ASGI Mode Example
+
+MCP can also be mounted to existing ASGI applications:
+
+```python
+from pydantic_rpc import ConnecpyASGIApp
+from pydantic_rpc.mcp import MCPExporter
+
+# Create Connect-RPC ASGI app
+app = ConnecpyASGIApp()
+app.mount(MathService())
+
+# Add MCP support via HTTP/SSE
+mcp = MCPExporter(MathService())
+mcp.mount_to_asgi(app, path="/mcp")
+
+# Run with uvicorn
+import uvicorn
+uvicorn.run(app, host="127.0.0.1", port=8000)
+```
+
+MCP endpoints will be available at:
+- SSE: `GET http://localhost:8000/mcp/sse`
+- Messages: `POST http://localhost:8000/mcp/messages/`
+
 ### 🗄️ Protobuf file and code (Python files) generation using CLI
 
 You can genereate protobuf files and code for a given module and a specified class using `pydantic-rpc` CLI command:
@@ -761,6 +830,7 @@ Using this generated proto file and tools as `protoc`, `buf` and `BSR`, you coul
 - [ ] Betterproto Support
 - [ ] Sonora-connect Support
 - [ ] Custom Health Check Support
+- [x] MCP (Model Context Protocol) Support via official MCP SDK
 - [ ] Add more examples
 - [ ] Add tests
 
