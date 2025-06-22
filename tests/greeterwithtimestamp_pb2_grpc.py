@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-import echoservice_pb2 as echoservice__pb2
+import greeterwithtimestamp_pb2 as greeterwithtimestamp__pb2
 
 GRPC_GENERATED_VERSION = '1.70.0'
 GRPC_VERSION = grpc.__version__
@@ -18,17 +18,15 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in echoservice_pb2_grpc.py depends on'
+        + f' but the generated code in greeterwithtimestamp_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class EchoServiceStub(object):
-    """Echo service.
-    A simple service that echoes messages back in uppercase.
-    """
+class GreeterWithTimestampStub(object):
+    """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
         """Constructor.
@@ -36,54 +34,43 @@ class EchoServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.Echo = channel.unary_unary(
-                '/echo.v1.EchoService/Echo',
-                request_serializer=echoservice__pb2.EchoRequest.SerializeToString,
-                response_deserializer=echoservice__pb2.EchoResponse.FromString,
+        self.SayHello = channel.unary_unary(
+                '/greeterwithtimestamp.v1.GreeterWithTimestamp/SayHello',
+                request_serializer=greeterwithtimestamp__pb2.WithTimestamp.SerializeToString,
+                response_deserializer=greeterwithtimestamp__pb2.WithTimestamp.FromString,
                 _registered_method=True)
 
 
-class EchoServiceServicer(object):
-    """Echo service.
-    A simple service that echoes messages back in uppercase.
-    """
+class GreeterWithTimestampServicer(object):
+    """Missing associated documentation comment in .proto file."""
 
-    def Echo(self, request, context):
-        """Echo the message back in uppercase.
-
-        Args:
-        request (EchoRequest): The request message.
-
-        Returns:
-        EchoResponse: The response message.
-        """
+    def SayHello(self, request, context):
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
 
-def add_EchoServiceServicer_to_server(servicer, server):
+def add_GreeterWithTimestampServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'Echo': grpc.unary_unary_rpc_method_handler(
-                    servicer.Echo,
-                    request_deserializer=echoservice__pb2.EchoRequest.FromString,
-                    response_serializer=echoservice__pb2.EchoResponse.SerializeToString,
+            'SayHello': grpc.unary_unary_rpc_method_handler(
+                    servicer.SayHello,
+                    request_deserializer=greeterwithtimestamp__pb2.WithTimestamp.FromString,
+                    response_serializer=greeterwithtimestamp__pb2.WithTimestamp.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'echo.v1.EchoService', rpc_method_handlers)
+            'greeterwithtimestamp.v1.GreeterWithTimestamp', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('echo.v1.EchoService', rpc_method_handlers)
+    server.add_registered_method_handlers('greeterwithtimestamp.v1.GreeterWithTimestamp', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
-class EchoService(object):
-    """Echo service.
-    A simple service that echoes messages back in uppercase.
-    """
+class GreeterWithTimestamp(object):
+    """Missing associated documentation comment in .proto file."""
 
     @staticmethod
-    def Echo(request,
+    def SayHello(request,
             target,
             options=(),
             channel_credentials=None,
@@ -96,9 +83,9 @@ class EchoService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/echo.v1.EchoService/Echo',
-            echoservice__pb2.EchoRequest.SerializeToString,
-            echoservice__pb2.EchoResponse.FromString,
+            '/greeterwithtimestamp.v1.GreeterWithTimestamp/SayHello',
+            greeterwithtimestamp__pb2.WithTimestamp.SerializeToString,
+            greeterwithtimestamp__pb2.WithTimestamp.FromString,
             options,
             channel_credentials,
             insecure,
