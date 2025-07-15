@@ -1,5 +1,8 @@
 from io import BytesIO
 import pytest
+from collections.abc import Callable, Awaitable
+from typing import Any
+
 from pydantic_rpc.core import ASGIApp, WSGIApp, ConnecpyWSGIApp, ConnecpyASGIApp
 from pydantic_rpc import Message
 
@@ -58,12 +61,15 @@ class EchoService:
         return EchoResponse(text=request.text.upper())
 
 
-def base_wsgi_app(environ, start_response):
+def base_wsgi_app(environ: dict[str, Any], start_response: Callable[[str, list[tuple[str, str]]], None]) -> list[bytes]:
+    _ = environ
     start_response("200 OK", [("Content-Type", "text/plain")])
     return [b"Hello, world!"]
 
 
-async def base_asgi_app(scope, receive, send):
+async def base_asgi_app(scope: dict[str, Any], receive: Callable[[], Awaitable[dict[str, Any]]], send: Callable[[dict[str, Any]], Awaitable[None]]) -> None:
+    _ = scope
+    _ = receive
     await send(
         {
             "type": "http.response.start",
@@ -80,12 +86,12 @@ async def test_asgi():
     echo_service = AsyncEchoService()
     app.mount(echo_service)
 
-    sent_messages = []
+    sent_messages: list[dict[str, Any]] = []
 
-    async def test_send(message):
+    async def test_send(message: dict[str, Any]) -> None:
         sent_messages.append(message)
 
-    async def test_receive():
+    async def test_receive() -> dict[str, Any]:
         return {"type": "http.request", "body": b""}
 
     await app.__call__(
@@ -106,7 +112,8 @@ def test_wsgi():
     echo_service = EchoService()
     app.mount(echo_service)
 
-    def start_response(status, headers):
+    def start_response(status: str, headers: list[tuple[str, str]]) -> None:
+        _ = headers
         assert status == "200 OK"
 
     app.__call__(
@@ -126,12 +133,12 @@ async def test_connecpy_asgi():
     echo_service = AsyncEchoService()
     app.mount(echo_service)
 
-    sent_messages = []
+    sent_messages: list[dict[str, Any]] = []
 
-    async def test_send(message):
+    async def test_send(message: dict[str, Any]) -> None:
         sent_messages.append(message)
 
-    async def test_receive():
+    async def test_receive() -> dict[str, Any]:
         return {"type": "http.request", "body": b'{"text": "hello"}'}
 
     await app.__call__(
@@ -177,7 +184,8 @@ def test_connecpy_wsgi():
 
     status_headers = {}
 
-    def start_response(status, headers):
+    def start_response(status: str, headers: list[tuple[str, str]]) -> None:
+        _ = headers
         status_headers["status"] = status
         status_headers["headers"] = headers
         print(status, headers)

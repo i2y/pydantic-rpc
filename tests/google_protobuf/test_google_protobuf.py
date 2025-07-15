@@ -27,7 +27,7 @@ class GreeterWithDuration:
 
 @pytest.mark.asyncio
 async def test_greeter_with_timestamp():
-    generate_and_compile_proto(
+    _ = generate_and_compile_proto(
         GreeterWithTimestamp(),
         existing_proto_path=Path("tests/google_protobuf/greeterwithtimestamp.proto"),
     )
@@ -35,7 +35,7 @@ async def test_greeter_with_timestamp():
 
 @pytest.mark.asyncio
 async def test_greeter_with_duration():
-    generate_and_compile_proto(
+    _ = generate_and_compile_proto(
         GreeterWithDuration(),
         existing_proto_path=Path("tests/google_protobuf/greeterwithduration.proto"),
     )
