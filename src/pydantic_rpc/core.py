@@ -16,7 +16,6 @@ from typing import (
     Type,
     TypeAlias,
     Union,
-    cast,
     get_args,
     get_origin,
 )
@@ -281,32 +280,145 @@ def connect_obj_with_stub_async(
         pass
 
     def implement_stub_method(
-        method: Callable[..., AsyncIterator[Message] | Awaitable[Message]],
+        method: Callable[..., Any],
     ) -> Callable[[object, Any, Any], Any]:
         sig = inspect.signature(method)
-        arg_type = get_request_arg_type(sig)
-        converter = generate_message_converter(arg_type)
+        input_type = get_request_arg_type(sig)
+        is_input_stream = is_stream_type(input_type)
         response_type = sig.return_annotation
+        is_output_stream = is_stream_type(response_type)
         size_of_parameters = len(sig.parameters)
 
-        if is_stream_type(response_type):
-            method = cast(Callable[..., AsyncIterator[Message]], method)
-            item_type = get_args(response_type)[0]
-            match size_of_parameters:
-                case 1:
+        if size_of_parameters not in (1, 2):
+            raise TypeError(
+                f"Method '{method.__name__}' must have 1 or 2 parameters, got {size_of_parameters}"
+            )
 
-                    async def stub_method_stream1(
+        if is_input_stream:
+            input_item_type = get_args(input_type)[0]
+            item_converter = generate_message_converter(input_item_type)
+
+            async def convert_iterator(
+                proto_iter: AsyncIterator[Any],
+            ) -> AsyncIterator[Message]:
+                async for proto in proto_iter:
+                    yield item_converter(proto)
+
+            if is_output_stream:
+                # stream-stream
+                output_item_type = get_args(response_type)[0]
+
+                if size_of_parameters == 1:
+
+                    async def stub_method(
+                        self: object,
+                        request_iterator: AsyncIterator[Any],
+                        context: Any,
+                    ) -> AsyncIterator[Any]:
+                        _ = self
+                        try:
+                            arg_iter = convert_iterator(request_iterator)
+                            async for resp_obj in method(arg_iter):
+                                yield convert_python_message_to_proto(
+                                    resp_obj, output_item_type, pb2_module
+                                )
+                        except ValidationError as e:
+                            await context.abort(
+                                grpc.StatusCode.INVALID_ARGUMENT, str(e)
+                            )
+                        except Exception as e:
+                            await context.abort(grpc.StatusCode.INTERNAL, str(e))
+
+                else:  # size_of_parameters == 2
+
+                    async def stub_method(
+                        self: object,
+                        request_iterator: AsyncIterator[Any],
+                        context: Any,
+                    ) -> AsyncIterator[Any]:
+                        _ = self
+                        try:
+                            arg_iter = convert_iterator(request_iterator)
+                            async for resp_obj in method(arg_iter, context):
+                                yield convert_python_message_to_proto(
+                                    resp_obj, output_item_type, pb2_module
+                                )
+                        except ValidationError as e:
+                            await context.abort(
+                                grpc.StatusCode.INVALID_ARGUMENT, str(e)
+                            )
+                        except Exception as e:
+                            await context.abort(grpc.StatusCode.INTERNAL, str(e))
+
+                return stub_method
+
+            else:
+                # stream-unary
+                if size_of_parameters == 1:
+
+                    async def stub_method(
+                        self: object,
+                        request_iterator: AsyncIterator[Any],
+                        context: Any,
+                    ) -> Any:
+                        _ = self
+                        try:
+                            arg_iter = convert_iterator(request_iterator)
+                            resp_obj = await method(arg_iter)
+                            return convert_python_message_to_proto(
+                                resp_obj, response_type, pb2_module
+                            )
+                        except ValidationError as e:
+                            await context.abort(
+                                grpc.StatusCode.INVALID_ARGUMENT, str(e)
+                            )
+                        except Exception as e:
+                            await context.abort(grpc.StatusCode.INTERNAL, str(e))
+
+                else:  # size_of_parameters == 2
+
+                    async def stub_method(
+                        self: object,
+                        request_iterator: AsyncIterator[Any],
+                        context: Any,
+                    ) -> Any:
+                        _ = self
+                        try:
+                            arg_iter = convert_iterator(request_iterator)
+                            resp_obj = await method(arg_iter, context)
+                            return convert_python_message_to_proto(
+                                resp_obj, response_type, pb2_module
+                            )
+                        except ValidationError as e:
+                            await context.abort(
+                                grpc.StatusCode.INVALID_ARGUMENT, str(e)
+                            )
+                        except Exception as e:
+                            await context.abort(grpc.StatusCode.INTERNAL, str(e))
+
+                return stub_method
+
+        else:
+            # unary input
+            converter = generate_message_converter(input_type)
+
+            if is_output_stream:
+                # unary-stream
+                output_item_type = get_args(response_type)[0]
+
+                if size_of_parameters == 1:
+
+                    async def stub_method(
                         self: object,
                         request: Any,
                         context: Any,
-                        method: Callable[..., AsyncIterator[Message]] = method,
                     ) -> AsyncIterator[Any]:
                         _ = self
                         try:
                             arg = converter(request)
                             async for resp_obj in method(arg):
                                 yield convert_python_message_to_proto(
-                                    resp_obj, item_type, pb2_module
+                                    resp_obj, output_item_type, pb2_module
                                 )
                         except ValidationError as e:
                             await context.abort(
@@ -315,21 +427,19 @@ def connect_obj_with_stub_async(
                         except Exception as e:
                             await context.abort(grpc.StatusCode.INTERNAL, str(e))
 
-                    return stub_method_stream1
-                case 2:
+                else:  # size_of_parameters == 2
 
-                    async def stub_method_stream2(
+                    async def stub_method(
                         self: object,
                         request: Any,
                         context: Any,
-                        method: Callable[..., AsyncIterator[Message]] = method,
                     ) -> AsyncIterator[Any]:
                         _ = self
                         try:
                             arg = converter(request)
                             async for resp_obj in method(arg, context):
                                 yield convert_python_message_to_proto(
-                                    resp_obj, item_type, pb2_module
+                                    resp_obj, output_item_type, pb2_module
                                 )
                         except ValidationError as e:
                             await context.abort(
@@ -338,59 +448,53 @@ def connect_obj_with_stub_async(
                         except Exception as e:
                             await context.abort(grpc.StatusCode.INTERNAL, str(e))
 
-                    return stub_method_stream2
-                case _:
-                    raise Exception("Method must have exactly one or two parameters")
+                return stub_method
 
-        match size_of_parameters:
-            case 1:
-                method = cast(Callable[..., Awaitable[Message]], method)
+            else:
+                # unary-unary
+                if size_of_parameters == 1:
 
-                async def stub_method1(
-                    self: object,
-                    request: Any,
-                    context: Any,
-                    method: Callable[..., Awaitable[Message]] = method,
-                ) -> Any:
-                    _ = self
-                    try:
-                        arg = converter(request)
-                        resp_obj = await method(arg)
-                        return convert_python_message_to_proto(
-                            resp_obj, response_type, pb2_module
-                        )
-                    except ValidationError as e:
-                        await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(e))
-                    except Exception as e:
-                        await context.abort(grpc.StatusCode.INTERNAL, str(e))
+                    async def stub_method(
+                        self: object,
+                        request: Any,
+                        context: Any,
+                    ) -> Any:
+                        _ = self
+                        try:
+                            arg = converter(request)
+                            resp_obj = await method(arg)
+                            return convert_python_message_to_proto(
+                                resp_obj, response_type, pb2_module
+                            )
+                        except ValidationError as e:
+                            await context.abort(
+                                grpc.StatusCode.INVALID_ARGUMENT, str(e)
+                            )
+                        except Exception as e:
+                            await context.abort(grpc.StatusCode.INTERNAL, str(e))
 
-                return stub_method1
+                else:  # size_of_parameters == 2
 
-            case 2:
-                method = cast(Callable[..., Awaitable[Message]], method)
+                    async def stub_method(
+                        self: object,
+                        request: Any,
+                        context: Any,
+                    ) -> Any:
+                        _ = self
+                        try:
+                            arg = converter(request)
+                            resp_obj = await method(arg, context)
+                            return convert_python_message_to_proto(
+                                resp_obj, response_type, pb2_module
+                            )
+                        except ValidationError as e:
+                            await context.abort(
+                                grpc.StatusCode.INVALID_ARGUMENT, str(e)
+                            )
+                        except Exception as e:
+                            await context.abort(grpc.StatusCode.INTERNAL, str(e))
 
-                async def stub_method2(
-                    self: object,
-                    request: Any,
-                    context: Any,
-                    method: Callable[..., Awaitable[Message]] = method,
-                ) -> Any:
-                    _ = self
-                    try:
-                        arg = converter(request)
-                        resp_obj = await method(arg, context)
-                        return convert_python_message_to_proto(
-                            resp_obj, response_type, pb2_module
-                        )
-                    except ValidationError as e:
-                        await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(e))
-                    except Exception as e:
-                        await context.abort(grpc.StatusCode.INTERNAL, str(e))
-
-                return stub_method2
-
-            case _:
-                raise Exception("Method must have exactly one or two parameters")
+                return stub_method
 
     for method_name, method in get_rpc_methods(obj):
         if method.__name__.startswith("_"):
@@ -1024,15 +1128,26 @@ def generate_proto(obj: object, package_name: str = "") -> str:
             for comment_line in comment_out(method_docstr):
                 rpc_definitions.append(comment_line)
 
-        if is_stream_type(response_type):
-            item_type = get_args(response_type)[0]
-            rpc_definitions.append(
-                f"rpc {method_name} ({request_type.__name__}) returns (stream {item_type.__name__});"
-            )
-        else:
-            rpc_definitions.append(
-                f"rpc {method_name} ({request_type.__name__}) returns ({response_type.__name__});"
-            )
+        input_type = request_type
+        input_is_stream = is_stream_type(input_type)
+        output_is_stream = is_stream_type(response_type)
+        input_msg_type = get_args(input_type)[0] if input_is_stream else input_type
+        output_msg_type = (
+            get_args(response_type)[0] if output_is_stream else response_type
+        )
+        input_str = (
+            f"stream {input_msg_type.__name__}"
+            if input_is_stream
+            else input_msg_type.__name__
+        )
+        output_str = (
+            f"stream {output_msg_type.__name__}"
+            if output_is_stream
+            else output_msg_type.__name__
+        )
+        rpc_definitions.append(
+            f"rpc {method_name} ({input_str}) returns ({output_str});"
+        )
 
     if not package_name:
         if service_name.endswith("Service"):
@@ -1259,7 +1374,7 @@ def generate_and_compile_proto(
     obj: object,
     package_name: str = "",
     existing_proto_path: Path | None = None,
-) -> tuple[Any, Any] | None:
+) -> tuple[Any, Any]:
     if is_skip_generation():
         import importlib
 

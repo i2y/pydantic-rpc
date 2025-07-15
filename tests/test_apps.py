@@ -1,10 +1,19 @@
 from io import BytesIO
 import pytest
 from collections.abc import Callable, Awaitable
-from typing import Any
+from typing import Any, AsyncIterator
 
 from pydantic_rpc.core import ASGIApp, WSGIApp, ConnecpyWSGIApp, ConnecpyASGIApp
 from pydantic_rpc import Message
+
+import random
+import grpc.aio
+from pydantic_rpc.core import (
+    AsyncIOServer,
+    generate_and_compile_proto,
+    generate_proto,
+    is_skip_generation,
+)
 
 
 class EchoRequest(Message):
@@ -61,13 +70,70 @@ class EchoService:
         return EchoResponse(text=request.text.upper())
 
 
-def base_wsgi_app(environ: dict[str, Any], start_response: Callable[[str, list[tuple[str, str]]], None]) -> list[bytes]:
+class UnaryStreamRequest(Message):
+    text: str
+
+
+class UnaryStreamResponse(Message):
+    text: str
+
+
+class UnaryStreamService:
+    async def stream_response(
+        self, request: UnaryStreamRequest
+    ) -> AsyncIterator[UnaryStreamResponse]:
+        yield UnaryStreamResponse(text=request.text.upper())
+        yield UnaryStreamResponse(text=request.text.lower())
+
+
+class StreamUnaryRequest(Message):
+    text: str
+
+
+class StreamUnaryResponse(Message):
+    text: str
+
+
+class StreamUnaryService:
+    async def collect_requests(
+        self, requests: AsyncIterator[StreamUnaryRequest]
+    ) -> StreamUnaryResponse:
+        collected: list[str] = []
+        async for req in requests:
+            collected.append(req.text)
+        return StreamUnaryResponse(text=" ".join(collected))
+
+
+class StreamStreamRequest(Message):
+    text: str
+
+
+class StreamStreamResponse(Message):
+    text: str
+
+
+class StreamStreamService:
+    async def echo_stream(
+        self, requests: AsyncIterator[StreamStreamRequest]
+    ) -> AsyncIterator[StreamStreamResponse]:
+        async for req in requests:
+            yield StreamStreamResponse(text=req.text.upper())
+
+
+def base_wsgi_app(
+    environ: dict[str, Any],
+    start_response: Callable[[str, list[tuple[str, str]]], None],
+) -> list[bytes]:
     _ = environ
     start_response("200 OK", [("Content-Type", "text/plain")])
     return [b"Hello, world!"]
 
 
-async def base_asgi_app(scope: dict[str, Any], receive: Callable[[], Awaitable[dict[str, Any]]], send: Callable[[dict[str, Any]], Awaitable[None]]) -> None:
+async def base_asgi_app(
+    scope: dict[str, Any],
+    receive: Callable[[], Awaitable[dict[str, Any]]],
+    send: Callable[[dict[str, Any]], Awaitable[None]],
+) -> None:
     _ = scope
     _ = receive
     await send(
@@ -196,3 +262,108 @@ def test_connecpy_wsgi():
     assert status_headers.get("status") == "200 OK"
     print(response_body)
     assert b"HELLO" in response_body  # Response should contain uppercased input
+
+
+def test_generate_proto_streaming():
+    proto = generate_proto(UnaryStreamService())
+    assert (
+        "rpc StreamResponse (UnaryStreamRequest) returns (stream UnaryStreamResponse);"
+        in proto
+    )
+
+    proto = generate_proto(StreamUnaryService())
+    assert (
+        "rpc CollectRequests (stream StreamUnaryRequest) returns (StreamUnaryResponse);"
+        in proto
+    )
+
+    proto = generate_proto(StreamStreamService())
+    assert (
+        "rpc EchoStream (stream StreamStreamRequest) returns (stream StreamStreamResponse);"
+        in proto
+    )
+
+
+@pytest.mark.asyncio
+async def test_unary_stream_integration():
+    if is_skip_generation():
+        pytest.skip("Skipping generation tests")
+
+    port = random.randint(50000, 60000)
+    service = UnaryStreamService()
+    pb2_grpc_module, pb2_module = generate_and_compile_proto(service)
+    server = AsyncIOServer()
+    server.mount_using_pb2_modules(pb2_grpc_module, pb2_module, service)
+    _ = server._server.add_insecure_port(f"[::]:{port}")
+    await server._server.start()
+
+    try:
+        async with grpc.aio.insecure_channel(f"localhost:{port}") as channel:
+            stub_class = getattr(pb2_grpc_module, "UnaryStreamServiceStub")
+            stub = stub_class(channel)
+            responses = []
+            async for resp in stub.StreamResponse(
+                pb2_module.UnaryStreamRequest(text="Hello")
+            ):  # type: ignore
+                responses.append(resp.text)
+            assert responses == ["HELLO", "hello"]
+    finally:
+        await server._server.stop(1)
+
+
+@pytest.mark.asyncio
+async def test_stream_unary_integration():
+    if is_skip_generation():
+        pytest.skip("Skipping generation tests")
+
+    port = random.randint(50000, 60000)
+    service = StreamUnaryService()
+    pb2_grpc_module, pb2_module = generate_and_compile_proto(service)
+    server = AsyncIOServer()
+    server.mount_using_pb2_modules(pb2_grpc_module, pb2_module, service)
+    _ = server._server.add_insecure_port(f"[::]:{port}")
+    await server._server.start()
+
+    try:
+        async with grpc.aio.insecure_channel(f"localhost:{port}") as channel:
+            stub_class = getattr(pb2_grpc_module, "StreamUnaryServiceStub")
+            stub = stub_class(channel)
+
+            async def request_gen():
+                yield pb2_module.StreamUnaryRequest(text="Hello")
+                yield pb2_module.StreamUnaryRequest(text="World")
+
+            response = await stub.CollectRequests(request_gen())  # type: ignore
+            assert response.text == "Hello World"
+    finally:
+        await server._server.stop(1)
+
+
+@pytest.mark.asyncio
+async def test_stream_stream_integration():
+    if is_skip_generation():
+        pytest.skip("Skipping generation tests")
+
+    port = random.randint(50000, 60000)
+    service = StreamStreamService()
+    pb2_grpc_module, pb2_module = generate_and_compile_proto(service)
+    server = AsyncIOServer()
+    server.mount_using_pb2_modules(pb2_grpc_module, pb2_module, service)
+    _ = server._server.add_insecure_port(f"[::]:{port}")
+    await server._server.start()
+
+    try:
+        async with grpc.aio.insecure_channel(f"localhost:{port}") as channel:
+            stub_class = getattr(pb2_grpc_module, "StreamStreamServiceStub")
+            stub = stub_class(channel)
+
+            async def request_gen():
+                yield pb2_module.StreamStreamRequest(text="Hello")
+                yield pb2_module.StreamStreamRequest(text="World")
+
+            responses = []
+            async for resp in stub.EchoStream(request_gen()):  # type: ignore
+                responses.append(resp.text)
+            assert responses == ["HELLO", "WORLD"]
+    finally:
+        await server._server.stop(1)
