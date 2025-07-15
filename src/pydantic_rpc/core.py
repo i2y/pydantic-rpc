@@ -1082,20 +1082,16 @@ def generate_grpc_code(proto_path: Path) -> types.ModuleType | None:
     # 3) Build and run the protoc command
     out_str = str(out_dir)
     well_known_path = os.path.join(os.path.dirname(grpc_tools.__file__), "_proto")
-    try:
-        rel_input = str(proto_path.relative_to(out_dir.parent.parent))
-        root_dir = out_dir.parent.parent
-    except ValueError:
-        rel_input = proto_path.name
-        root_dir = out_dir
     args = [
-        f"-I{str(root_dir)}",
+        "protoc",  # Dummy program name (required for protoc.main)
+        "-I.",
         f"-I{well_known_path}",
         f"--grpc_python_out={out_str}",
-        rel_input,
+        proto_path.name,
     ]
+
     current_dir = os.getcwd()
-    os.chdir(str(root_dir))
+    os.chdir(str(out_dir))
     try:
         if protoc.main(args) != 0:
             return None
@@ -1140,20 +1136,16 @@ def generate_connecpy_code(proto_path: Path) -> types.ModuleType | None:
     # 3) Build and run the protoc command
     out_str = str(out_dir)
     well_known_path = os.path.join(os.path.dirname(grpc_tools.__file__), "_proto")
-    try:
-        rel_input = str(proto_path.relative_to(out_dir.parent.parent))
-        root_dir = out_dir.parent.parent
-    except ValueError:
-        rel_input = proto_path.name
-        root_dir = out_dir
     args = [
-        f"-I{str(root_dir)}",
+        "protoc",  # Dummy program name (required for protoc.main)
+        "-I.",
         f"-I{well_known_path}",
         f"--connecpy_out={out_str}",
-        rel_input,
+        proto_path.name,
     ]
+
     current_dir = os.getcwd()
-    os.chdir(str(root_dir))
+    os.chdir(str(out_dir))
     try:
         if protoc.main(args) != 0:
             return None
@@ -1198,22 +1190,17 @@ def generate_pb_code(proto_path: Path) -> types.ModuleType | None:
     # 3) Build and run protoc command
     out_str = str(out_dir)
     well_known_path = os.path.join(os.path.dirname(grpc_tools.__file__), "_proto")
-    try:
-        rel_input = str(proto_path.relative_to(out_dir.parent.parent))
-        root_dir = out_dir.parent.parent
-    except ValueError:
-        rel_input = proto_path.name
-        root_dir = out_dir
     args = [
-        f"-I{str(root_dir)}",
+        "protoc",  # Dummy program name (required for protoc.main)
+        "-I.",
         f"-I{well_known_path}",
         f"--python_out={out_str}",
         f"--pyi_out={out_str}",
-        rel_input,
+        proto_path.name,
     ]
 
     current_dir = os.getcwd()
-    os.chdir(str(root_dir))
+    os.chdir(str(out_dir))
     try:
         if protoc.main(args) != 0:
             return None
