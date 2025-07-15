@@ -1217,7 +1217,9 @@ name = "pydantic-rpc"
 version = "0.6.1"
 source = { editable = "." }
 dependencies = [
+    { name = "annotated-types" },
     { name = "connecpy" },
+    { name = "grpcio" },
     { name = "grpcio-health-checking" },
     { name = "grpcio-reflection" },
     { name = "grpcio-tools" },
@@ -1238,7 +1240,9 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "annotated-types", specifier = ">=0.5.0" },
     { name = "connecpy", specifier = ">=1.4.1" },
+    { name = "grpcio", specifier = ">=1.56.2" },
     { name = "grpcio-health-checking", specifier = ">=1.56.2" },
     { name = "grpcio-reflection", specifier = ">=1.56.2" },
     { name = "grpcio-tools", specifier = ">=1.56.2" },

@@ -11,3 +11,8 @@ wheels/
 
 # vscode
 .vscode
+
+# development
+.devcontainer/
+.env
+rpc_files/

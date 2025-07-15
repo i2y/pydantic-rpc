@@ -3,6 +3,13 @@ import pytest
 from pydantic_rpc.core import ASGIApp, WSGIApp, ConnecpyWSGIApp, ConnecpyASGIApp
 from pydantic_rpc import Message
 
+import tests.asyncechoservice_pb2_grpc as async_pb2_grpc
+import tests.asyncechoservice_pb2 as async_pb2
+import tests.echoservice_pb2_grpc as sync_pb2_grpc
+import tests.echoservice_pb2 as sync_pb2
+import tests.asyncechoservice_connecpy as async_connecpy
+import tests.echoservice_connecpy as sync_connecpy
+
 
 class EchoRequest(Message):
     """Echo request message.
@@ -78,7 +85,7 @@ async def base_asgi_app(scope, receive, send):
 async def test_asgi():
     app = ASGIApp(base_asgi_app)
     echo_service = AsyncEchoService()
-    app.mount_objs(echo_service)
+    app.mount_using_pb2_modules(async_pb2_grpc, async_pb2, echo_service)
 
     sent_messages = []
 
@@ -104,7 +111,7 @@ async def test_asgi():
 def test_wsgi():
     app = WSGIApp(base_wsgi_app)
     echo_service = EchoService()
-    app.mount_objs(echo_service)
+    app.mount_using_pb2_modules(sync_pb2_grpc, sync_pb2, echo_service)
 
     def start_response(status, headers):
         assert status == "200 OK"
@@ -124,7 +131,7 @@ async def test_connecpy_asgi():
     """Test ConnecpyASGIApp with EchoService."""
     app = ConnecpyASGIApp()
     echo_service = AsyncEchoService()
-    app.mount(echo_service)
+    app.mount_using_pb2_modules(async_connecpy, async_pb2, echo_service)
 
     sent_messages = []
 
@@ -163,7 +170,7 @@ async def test_connecpy_asgi():
 def test_connecpy_wsgi():
     app = ConnecpyWSGIApp()
     echo_service = EchoService()
-    app.mount(echo_service)
+    app.mount_using_pb2_modules(sync_connecpy, sync_pb2, echo_service)
 
     body = b'{"text": "hello"}'
     environ = {
