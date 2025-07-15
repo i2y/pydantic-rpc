@@ -829,6 +829,50 @@ Using this generated proto file and tools as `protoc`, `buf` and `BSR`, you coul
 | subclass of pydantic.BaseModel | message                   |
 
 
+## ⚠️ Known Limitations
+
+### Union Types with Collections
+
+Due to protobuf's `oneof` restrictions, you cannot use `Union` types that contain `repeated` (list/tuple) or `map` (dict) fields directly. This is a limitation of the protobuf specification itself.
+
+**❌ Not Supported:**
+```python
+from typing import Union, List, Dict
+from pydantic_rpc import Message
+
+# These will fail during proto compilation
+class MyMessage(Message):
+    # Union with list - NOT SUPPORTED
+    field1: Union[List[int], str]
+
+    # Union with dict - NOT SUPPORTED
+    field2: Union[Dict[str, int], int]
+
+    # Union with nested collections - NOT SUPPORTED
+    field3: Union[List[Dict[str, int]], str]
+```
+
+**✅ Workaround - Use Message Wrappers:**
+```python
+from typing import Union, List, Dict
+from pydantic_rpc import Message
+
+# Wrap collections in Message types
+class IntList(Message):
+    values: List[int]
+
+class StringIntMap(Message):
+    values: Dict[str, int]
+
+class MyMessage(Message):
+    # Now these work!
+    field1: Union[IntList, str]
+    field2: Union[StringIntMap, int]
+```
+
+This approach works because protobuf allows message types within `oneof` fields, and the collections are contained within those messages.
+
+
 ## TODO
 - [ ] Streaming Support
   - [x] unary-stream
