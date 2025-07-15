@@ -4,65 +4,63 @@ import datetime
 import enum
 import inspect
 from collections.abc import AsyncIterator
-from typing import Any, Callable, Type, Union, get_args, get_origin
+from typing import Any, Callable, Union, get_args, get_origin
 
 from pydantic import BaseModel
 
+_SIMPLE_TYPE_MAP = {
+    int: {"type": "integer"},
+    float: {"type": "number"},
+    str: {"type": "string"},
+    bool: {"type": "boolean"},
+    bytes: {"type": "string", "format": "byte"},
+    datetime.datetime: {"type": "string", "format": "date-time"},
+    datetime.timedelta: {"type": "string", "format": "duration"},
+}
 
-def is_streaming_return(return_type: Type) -> bool:
+
+def is_streaming_return(return_type: Any) -> bool:
     """Check if the return type is a streaming response (AsyncIterator)."""
     origin = get_origin(return_type)
     return origin is AsyncIterator
 
 
-def python_type_to_json_type(python_type: Type) -> dict[str, Any]:
+def python_type_to_json_type(python_type: Any) -> dict[str, Any]:
     """Convert Python type to JSON Schema type."""
-    if python_type == int:
-        return {"type": "integer"}
-    elif python_type == float:
-        return {"type": "number"}
-    elif python_type == str:
-        return {"type": "string"}
-    elif python_type == bool:
-        return {"type": "boolean"}
-    elif python_type == bytes:
-        return {"type": "string", "format": "byte"}
-    elif python_type == datetime.datetime:
-        return {"type": "string", "format": "date-time"}
-    elif python_type == datetime.timedelta:
-        return {"type": "string", "format": "duration"}
-    elif get_origin(python_type) is list:
-        item_type = get_args(python_type)[0]
-        return {"type": "array", "items": python_type_to_json_type(item_type)}
-    elif get_origin(python_type) is dict:
-        key_type, value_type = get_args(python_type)
-        return {
-            "type": "object",
-            "additionalProperties": python_type_to_json_type(value_type),
-        }
-    elif inspect.isclass(python_type) and issubclass(python_type, enum.Enum):
-        return {"type": "string", "enum": [e.value for e in python_type]}
-    elif inspect.isclass(python_type) and issubclass(python_type, BaseModel):
-        # For Pydantic models, use their built-in schema generation
-        return python_type.model_json_schema()
-    elif get_origin(python_type) is Union:
-        # Handle Union types as oneOf
-        union_args = get_args(python_type)
-        # Filter out NoneType if present
-        non_none_types = [t for t in union_args if t is not type(None)]
-        if len(non_none_types) == 1:
-            # Optional type
-            schema = python_type_to_json_type(non_none_types[0])
-            schema["nullable"] = True
-            return schema
-        else:
-            return {"oneOf": [python_type_to_json_type(t) for t in non_none_types]}
-    else:
-        # Default to object type for unknown types
-        return {"type": "object"}
+    if python_type in _SIMPLE_TYPE_MAP:
+        return _SIMPLE_TYPE_MAP[python_type].copy()
+
+    match python_type:
+        case t if get_origin(t) is list:
+            item_type = get_args(t)[0]
+            return {"type": "array", "items": python_type_to_json_type(item_type)}
+        case t if get_origin(t) is dict:
+            _, value_type = get_args(t)
+            return {
+                "type": "object",
+                "additionalProperties": python_type_to_json_type(value_type),
+            }
+        case t if get_origin(t) is Union:
+            union_args = get_args(t)
+            non_none_types = [arg for arg in union_args if arg is not type(None)]
+            if len(non_none_types) == 1:
+                schema = python_type_to_json_type(non_none_types[0])
+                schema["nullable"] = True
+                return schema
+            else:
+                return {
+                    "oneOf": [python_type_to_json_type(arg) for arg in non_none_types]
+                }
+        case t if inspect.isclass(t) and issubclass(t, BaseModel):
+            return t.model_json_schema()
+        case t if inspect.isclass(t) and issubclass(t, enum.Enum):
+            return {"type": "string", "enum": [e.value for e in t]}
+        case _:
+            # Default to object type for unknown types
+            return {"type": "object"}
 
 
-def extract_method_info(method: Callable) -> dict[str, Any]:
+def extract_method_info(method: Callable[..., Any]) -> dict[str, Any]:
     """Extract method information for MCP tool definition."""
     sig = inspect.signature(method)
     doc = inspect.getdoc(method) or ""

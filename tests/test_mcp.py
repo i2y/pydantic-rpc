@@ -1,8 +1,9 @@
 """Tests for MCP functionality."""
 
-import json
+from pprint import pprint
+from typing import Any
+
 import pytest
-from pydantic import BaseModel
 
 from pydantic_rpc import Message
 
@@ -86,7 +87,7 @@ class TestMCPExporter:
 
         # Check that tools were extracted
         assert "process" in exporter.tools
-        assert "asyncprocess" in exporter.tools
+        assert "async_process" in exporter.tools
 
         # Check tool properties
         process_tool, _ = exporter.tools["process"]
@@ -103,6 +104,7 @@ class TestMCPExporter:
         assert hasattr(exporter, "run_stdio")  # Has run_stdio method
 
         # Check registered tools count
+        pprint(exporter.tools)
         assert len(exporter.tools) == 2
 
     @pytest.mark.asyncio
@@ -128,7 +130,7 @@ class TestMCPExporter:
         exporter = MCPExporter(service)
 
         # Get the wrapped method for async_process
-        _, wrapped_method = exporter.tools["asyncprocess"]
+        _, wrapped_method = exporter.tools["async_process"]
 
         # Call it with kwargs
         result = await wrapped_method(value=5, name="test")
@@ -161,9 +163,9 @@ class TestMCPExporter:
         # Mock ASGI app with mount method
         class MockApp:
             def __init__(self):
-                self.mounted = {}
+                self.mounted: dict[str, Any] = {}
 
-            def mount(self, path, app):
+            def mount(self, path: str, app: Any):
                 self.mounted[path] = app
 
         mock_app = MockApp()

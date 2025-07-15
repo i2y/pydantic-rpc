@@ -1,3 +1,5 @@
+from importlib.util import find_spec
+
 from .core import (
     Server,
     AsyncIOServer,
@@ -19,10 +21,7 @@ __all__ = [
 ]
 
 # Optional MCP support
-try:
-    from .mcp import MCPExporter
+if find_spec("mcp"):
+    from .mcp import MCPExporter  # noqa: F401
 
     __all__.append("MCPExporter")
-except ImportError:
-    # MCP dependencies not installed
-    pass

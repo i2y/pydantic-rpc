@@ -2,6 +2,8 @@ from datetime import datetime, timedelta
 
 import pytest
 
+from pathlib import Path
+
 from pydantic_rpc.core import Message, generate_and_compile_proto
 
 
@@ -25,9 +27,15 @@ class GreeterWithDuration:
 
 @pytest.mark.asyncio
 async def test_greeter_with_timestamp():
-    generate_and_compile_proto(GreeterWithTimestamp())
+    _ = generate_and_compile_proto(
+        GreeterWithTimestamp(),
+        existing_proto_path=Path("tests/google_protobuf/greeterwithtimestamp.proto"),
+    )
 
 
 @pytest.mark.asyncio
 async def test_greeter_with_duration():
-    generate_and_compile_proto(GreeterWithDuration())
+    _ = generate_and_compile_proto(
+        GreeterWithDuration(),
+        existing_proto_path=Path("tests/google_protobuf/greeterwithduration.proto"),
+    )

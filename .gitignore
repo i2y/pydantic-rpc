@@ -11,3 +11,13 @@ wheels/
 
 # vscode
 .vscode
+
+# development
+.devcontainer/
+.env
+rpc_files/
+
+# tests
+tests/**/*.py
+tests/**/*.pyi
+!tests/**/test_*.py

@@ -267,6 +267,13 @@ export PYDANTIC_RPC_SKIP_GENERATION=true
 
 When this variable is set to "true", PydanticRPC will load existing pre-generated modules rather than generating them on the fly.
 
+## 🪧 Setting Protobuf and Connecpy/gRPC generation directory
+By default your files will be generated in the current working directory where you ran the code from, but you can set a custom specific directory by setting the environment variable below:
+
+```bash
+export PYDANTIC_RPC_PROTO_PATH=/your/path
+```
+
 ## 💎 Advanced Features
 
 ### 🌊 Response Streaming

@@ -2,26 +2,25 @@
 
 import asyncio
 import inspect
-from typing import Any, Optional, Sequence
+from collections.abc import Callable
+from typing import Any
 
 from pydantic import BaseModel
 
 try:
-    from mcp.server import Server, InitializationOptions
-    from mcp.server.stdio import stdio_server
+    from mcp.server import InitializationOptions, Server
     from mcp.server.sse import SseServerTransport
+    from mcp.server.stdio import stdio_server
     from mcp.types import (
-        CallToolRequest,
+        Content,
+        ServerCapabilities,
         TextContent,
         Tool,
-        ServerCapabilities,
-        Content,
     )
 except ImportError:
     raise ImportError("mcp is required for MCP support. Install with: pip install mcp")
 
-from ..core import get_rpc_methods
-from .converter import extract_method_info, python_type_to_json_type
+from .converter import extract_method_info
 
 
 class MCPExporter:
@@ -30,8 +29,8 @@ class MCPExporter:
     def __init__(
         self,
         service_obj: object,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
+        name: str | None = None,
+        description: str | None = None,
     ):
         """Initialize MCPExporter with a service object.
 
@@ -40,20 +39,22 @@ class MCPExporter:
             name: Name for the MCP server (defaults to service class name)
             description: Description for the MCP server
         """
-        self.service = service_obj
-        self.name = name or service_obj.__class__.__name__
-        self.description = (
+        self.service: object = service_obj
+        self.name: str = name or service_obj.__class__.__name__
+        self.description: str = (
             description or f"MCP tools from {service_obj.__class__.__name__}"
         )
 
         # Create MCP Server instance
-        self.server = Server(self.name, version="1.0.0", instructions=self.description)
+        self.server: Server[Any] = Server(
+            self.name, version="1.0.0", instructions=self.description
+        )
 
         # Store tools for later reference
         self.tools: dict[str, tuple[Tool, Any]] = {}
 
         # SSE transport instance (created lazily)
-        self._sse_transport: Optional[SseServerTransport] = None
+        self._sse_transport: SseServerTransport | None = None
 
         # Register handlers
         self._register_handlers()
@@ -65,12 +66,12 @@ class MCPExporter:
         """Register MCP protocol handlers."""
 
         @self.server.list_tools()
-        async def handle_list_tools() -> list[Tool]:
+        async def handle_list_tools() -> list[Tool]:  # pyright:ignore[reportUnusedFunction]
             """List all available tools."""
             return [tool for tool, _ in self.tools.values()]
 
         @self.server.call_tool()
-        async def handle_call_tool(
+        async def handle_call_tool(  # pyright:ignore[reportUnusedFunction]
             name: str, arguments: dict[str, Any] | None
         ) -> list[Content]:
             """Execute a tool."""
@@ -98,9 +99,16 @@ class MCPExporter:
 
     def _extract_tools(self):
         """Extract tools from the service object."""
-        for method_name, method in get_rpc_methods(self.service):
-            # Skip if not a proper method
-            if not inspect.ismethod(method) or method_name.startswith("_"):
+        for method_name, method in inspect.getmembers(self.service, inspect.ismethod):
+            # Skip private methods
+            if method_name.startswith("_"):
+                continue
+
+            # Exclude methods from external modules (like pytest fixtures)
+            method_module = inspect.getmodule(method)
+            if method_module and not method_module.__name__.startswith(
+                self.service.__class__.__module__
+            ):
                 continue
 
             tool_name = method_name.lower()
@@ -131,8 +139,10 @@ class MCPExporter:
                     # For Pydantic models, create a wrapper that constructs the model
                     if inspect.iscoroutinefunction(method):
 
-                        def make_async_wrapper(m, pt):
-                            async def wrapped_method(**kwargs):
+                        def make_async_wrapper(
+                            m: Callable[..., Any], pt: type[BaseModel]
+                        ) -> Callable[..., Any]:
+                            async def wrapped_method(**kwargs: Any) -> Any:
                                 request = pt(**kwargs)
                                 return await m(request)
 
@@ -144,8 +154,10 @@ class MCPExporter:
                         )
                     else:
 
-                        def make_sync_wrapper(m, pt):
-                            def wrapped_method(**kwargs):
+                        def make_sync_wrapper(
+                            m: Callable[..., Any], pt: type[BaseModel]
+                        ) -> Callable[..., Any]:
+                            def wrapped_method(**kwargs: Any) -> Any:
                                 request = pt(**kwargs)
                                 return m(request)
 
@@ -185,11 +197,10 @@ class MCPExporter:
         Returns:
             An ASGI application that can be mounted or run directly.
         """
-        # Import here to avoid circular dependencies
+        _ = path
         try:
             from starlette.applications import Starlette
-            from starlette.routing import Route, Mount
-            from starlette.responses import Response
+            from starlette.routing import Mount, Route
         except ImportError:
             raise ImportError(
                 "starlette is required for HTTP/SSE transport. "
@@ -204,7 +215,7 @@ class MCPExporter:
         sse_transport = self._sse_transport
 
         # Create SSE endpoint handler
-        async def handle_sse(request):
+        async def handle_sse(request: Any) -> None:
             # Use ASGI interface directly
             scope = request.scope
             receive = request.receive
@@ -249,7 +260,11 @@ class MCPExporter:
         elif hasattr(asgi_app, "_app"):
             original_app = asgi_app._app
 
-            async def wrapped_app(scope, receive, send):
+            async def wrapped_app(
+                scope: dict[str, Any],
+                receive: Callable[[], Any],
+                send: Callable[[Any], Any],
+            ) -> None:
                 if scope["type"] == "http" and scope["path"].startswith(path):
                     # Create a new scope with adjusted path
                     scope = dict(scope)

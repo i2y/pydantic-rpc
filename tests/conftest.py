@@ -1,7 +1,14 @@
 """pytest configuration for pydantic-rpc tests."""
 
-import os
 import sys
+import os
+import tempfile
+
+tests_path = os.path.dirname(__file__)
+if tests_path not in sys.path:
+    sys.path.insert(0, tests_path)
+
+os.environ["PYDANTIC_RPC_PROTO_PATH"] = str(tempfile.mkdtemp())
 
 # Add the Go bin directory to PATH for protoc-gen-connecpy
 go_bin = os.path.expanduser("~/go/bin")
