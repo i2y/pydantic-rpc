@@ -874,16 +874,16 @@ This approach works because protobuf allows message types within `oneof` fields,
 
 
 ## TODO
-- [ ] Streaming Support
+- [x] Streaming Support
   - [x] unary-stream
-  - [ ] stream-unary
-  - [ ] stream-stream
+  - [x] stream-unary
+  - [x] stream-stream
 - [ ] Betterproto Support
 - [ ] Sonora-connect Support
 - [ ] Custom Health Check Support
 - [x] MCP (Model Context Protocol) Support via official MCP SDK
 - [ ] Add more examples
-- [ ] Add tests
+- [x] Add tests
 
 ## 📜 License
 
