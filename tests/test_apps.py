@@ -14,6 +14,7 @@ from pydantic_rpc.core import (
     generate_proto,
     is_skip_generation,
 )
+from tests.conftest import should_skip_connecpy_tests
 
 
 class EchoRequest(Message):
@@ -192,6 +193,7 @@ def test_wsgi():
     )
 
 
+@pytest.mark.skipif(should_skip_connecpy_tests(), reason="Skipping connecpy tests because connecpy is not installed")
 @pytest.mark.asyncio
 async def test_connecpy_asgi():
     """Test ConnecpyASGIApp with EchoService."""
@@ -233,6 +235,7 @@ async def test_connecpy_asgi():
     assert b"HELLO" in response_body  # Response should contain uppercased input
 
 
+@pytest.mark.skipif(should_skip_connecpy_tests(), reason="Skipping connecpy tests because connecpy is not installed")
 def test_connecpy_wsgi():
     app = ConnecpyWSGIApp()
     echo_service = EchoService()

@@ -10,6 +10,7 @@ import time
 import types
 from collections.abc import AsyncIterator, Awaitable, Callable
 from concurrent import futures
+from pathlib import Path
 from posixpath import basename
 from typing import (
     Any,
@@ -19,12 +20,10 @@ from typing import (
     get_args,
     get_origin,
 )
-from pathlib import Path
 
 import annotated_types
 import grpc
 import grpc_tools
-from grpc_tools import protoc
 from connecpy.asgi import ConnecpyASGIApp as ConnecpyASGI
 from connecpy.errors import Errors
 from connecpy.wsgi import ConnecpyWSGIApp as ConnecpyWSGI
@@ -32,11 +31,12 @@ from connecpy.wsgi import ConnecpyWSGIApp as ConnecpyWSGI
 # Protobuf Python modules for Timestamp, Duration (requires protobuf / grpcio)
 from google.protobuf import duration_pb2, timestamp_pb2
 from grpc_health.v1 import health_pb2, health_pb2_grpc
+from grpc_health.v1.health import HealthServicer
 from grpc_reflection.v1alpha import reflection
+from grpc_tools import protoc
 from pydantic import BaseModel, ValidationError
 from sonora.asgi import grpcASGI
 from sonora.wsgi import grpcWSGI
-from grpc_health.v1.health import HealthServicer
 
 ###############################################################################
 # 1. Message definitions & converter extensions
@@ -150,8 +150,66 @@ def generate_message_converter(arg_type: Type[Message]) -> Callable[[Any], Messa
 
     def converter(request: Any) -> Message:
         rdict = {}
-        for field in fields.keys():
-            rdict[field] = converters[field](getattr(request, field))
+        for field_name, field_info in fields.items():
+            field_type = field_info.annotation
+
+            # Check if this is a union type
+            if field_type is not None and is_union_type(field_type):
+                union_args = flatten_union(field_type)
+                has_none = type(None) in union_args
+                non_none_args = [arg for arg in union_args if arg is not type(None)]
+
+                if has_none and len(non_none_args) == 1:
+                    # This is Optional[T] - check if protobuf field is set
+                    try:
+                        if hasattr(request, "HasField") and request.HasField(
+                            field_name
+                        ):
+                            rdict[field_name] = converters[field_name](
+                                getattr(request, field_name)
+                            )
+                        else:
+                            # Field not set in protobuf, set to None for Optional fields
+                            rdict[field_name] = None
+                    except ValueError:
+                        # HasField doesn't work for this field type (e.g., repeated fields)
+                        # Fall back to regular conversion
+                        rdict[field_name] = converters[field_name](
+                            getattr(request, field_name)
+                        )
+                elif len(non_none_args) > 1:
+                    # This is a oneof field (Union[str, int] etc.)
+                    # Check which oneof field is set
+                    try:
+                        which_field = request.WhichOneof(field_name)
+                        if which_field:
+                            # Extract the value from the set oneof field
+                            proto_value = getattr(request, which_field)
+
+                            # Determine the Python type from the oneof field name
+                            # e.g., "value_string" -> str, "value_int32" -> int
+                            for union_arg in non_none_args:
+                                proto_typename = protobuf_type_mapping(union_arg)
+                                if (
+                                    proto_typename
+                                    and which_field
+                                    == f"{field_name}_{proto_typename.replace('.', '_')}"
+                                ):
+                                    # Convert using the specific type converter
+                                    type_converter = generate_converter(union_arg)
+                                    rdict[field_name] = type_converter(proto_value)
+                                    break
+                    except (AttributeError, ValueError):
+                        # WhichOneof failed, try fallback
+                        # This shouldn't happen for properly generated oneof fields
+                        pass
+                else:
+                    # Union with only None type (shouldn't happen)
+                    pass
+            else:
+                # For non-union fields, convert normally
+                rdict[field_name] = converters[field_name](getattr(request, field_name))
+
         return arg_type(**rdict)
 
     return converter
