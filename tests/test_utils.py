@@ -445,7 +445,7 @@ class TestEnvironmentUtils:
         with tempfile.TemporaryDirectory() as temp_dir:
             with patch.dict(os.environ, {"PYDANTIC_RPC_PROTO_PATH": temp_dir}):
                 result = get_proto_path("test.proto")
-                expected = Path(temp_dir) / "test.proto"
+                expected = (Path(temp_dir) / "test.proto").resolve()
                 assert result == expected
 
     def test_get_proto_path_with_expansion(self):
@@ -469,7 +469,7 @@ class TestEnvironmentUtils:
                 result = get_proto_path("test.proto")
                 assert new_dir.exists()
                 assert new_dir.is_dir()
-                assert result == new_dir / "test.proto"
+                assert result == (new_dir / "test.proto").resolve()
 
     def test_get_proto_path_not_directory_error(self):
         """Test error when proto path points to a file instead of directory."""
