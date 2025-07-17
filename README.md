@@ -274,6 +274,14 @@ By default your files will be generated in the current working directory where y
 export PYDANTIC_RPC_PROTO_PATH=/your/path
 ```
 
+## ⚠️ Reserved Fields
+
+You can also set an environment variable to reserve a set number of fields for proto generation, for backward and forward compatibility.
+
+```bash
+export PYDANTIC_RPC_RESERVED_FIELDS=1
+```
+
 ## 💎 Advanced Features
 
 ### 🌊 Response Streaming

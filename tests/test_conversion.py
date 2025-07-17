@@ -1,3 +1,4 @@
+import os
 import pytest
 import enum
 from typing import Any, Union, Optional, TYPE_CHECKING
@@ -12,11 +13,13 @@ from pydantic_rpc.core import (
     is_skip_generation,
 )
 
+from unittest import mock
+
 
 if TYPE_CHECKING:
+
     class Node:
         unique_package_name: str = ""
-
 
     class FixtureRequest:
         node: Node = Node()
@@ -274,17 +277,29 @@ def test_bidirectional_conversion_optional(request: FixtureRequest):
     proto_msg1 = convert_python_message_to_proto(py_msg1, OptionalMessage, pb2_module)
     converter = generate_message_converter(OptionalMessage)
     py_msg1_back = converter(proto_msg1)
-    assert getattr(py_msg1_back, "name", None) == "test", f"py_msg1_back.name exists: {hasattr(py_msg1_back, 'name')}, value: {getattr(py_msg1_back, 'name', None)}, expected: test"
-    assert getattr(py_msg1_back, "description", None) == "desc", f"py_msg1_back.description exists: {hasattr(py_msg1_back, 'description')}, value: {getattr(py_msg1_back, 'description', None)}, expected: desc"
-    assert getattr(py_msg1_back, "count", None) == 5, f"py_msg1_back.count exists: {hasattr(py_msg1_back, 'count')}, value: {getattr(py_msg1_back, 'count', None)}, expected: 5"
+    assert getattr(py_msg1_back, "name", None) == "test", (
+        f"py_msg1_back.name exists: {hasattr(py_msg1_back, 'name')}, value: {getattr(py_msg1_back, 'name', None)}, expected: test"
+    )
+    assert getattr(py_msg1_back, "description", None) == "desc", (
+        f"py_msg1_back.description exists: {hasattr(py_msg1_back, 'description')}, value: {getattr(py_msg1_back, 'description', None)}, expected: desc"
+    )
+    assert getattr(py_msg1_back, "count", None) == 5, (
+        f"py_msg1_back.count exists: {hasattr(py_msg1_back, 'count')}, value: {getattr(py_msg1_back, 'count', None)}, expected: 5"
+    )
 
     # Test with optional field None
     py_msg2 = OptionalMessage(name="test2", description=None)
     proto_msg2 = convert_python_message_to_proto(py_msg2, OptionalMessage, pb2_module)
     py_msg2_back = converter(proto_msg2)
-    assert getattr(py_msg2_back, "name", None) == "test2", f"py_msg2_back.name exists: {hasattr(py_msg2_back, 'name')}, value: {getattr(py_msg2_back, 'name', None)}, expected: test2"
-    assert getattr(py_msg2_back, "description", None) is None, f"py_msg2_back.description exists: {hasattr(py_msg2_back, 'description')}, value: {getattr(py_msg2_back, 'description', None)}, expected: None"
-    assert getattr(py_msg2_back, "count", None) is None, f"py_msg2_back.count exists: {hasattr(py_msg2_back, 'count')}, value: {getattr(py_msg2_back, 'count', None)}, expected: None"
+    assert getattr(py_msg2_back, "name", None) == "test2", (
+        f"py_msg2_back.name exists: {hasattr(py_msg2_back, 'name')}, value: {getattr(py_msg2_back, 'name', None)}, expected: test2"
+    )
+    assert getattr(py_msg2_back, "description", None) is None, (
+        f"py_msg2_back.description exists: {hasattr(py_msg2_back, 'description')}, value: {getattr(py_msg2_back, 'description', None)}, expected: None"
+    )
+    assert getattr(py_msg2_back, "count", None) is None, (
+        f"py_msg2_back.count exists: {hasattr(py_msg2_back, 'count')}, value: {getattr(py_msg2_back, 'count', None)}, expected: None"
+    )
 
 
 @pytest.mark.skipif(is_skip_generation(), reason="Skipping generation tests")
@@ -310,16 +325,26 @@ def test_bidirectional_conversion_union(request: FixtureRequest):
     proto_msg1 = convert_python_message_to_proto(py_msg1, UnionMessage, pb2_module)
     converter = generate_message_converter(UnionMessage)
     py_msg1_back = converter(proto_msg1)
-    assert getattr(py_msg1_back, "name", None) == "test", f"py_msg1_back.name exists: {hasattr(py_msg1_back, 'name')}, value: {getattr(py_msg1_back, 'name', None)}, expected: test"
-    assert getattr(py_msg1_back, "value", None) == "hello", f"py_msg1_back.value exists: {hasattr(py_msg1_back, 'value')}, value: {getattr(py_msg1_back, 'value', None)}, expected: hello"
+    assert getattr(py_msg1_back, "name", None) == "test", (
+        f"py_msg1_back.name exists: {hasattr(py_msg1_back, 'name')}, value: {getattr(py_msg1_back, 'name', None)}, expected: test"
+    )
+    assert getattr(py_msg1_back, "value", None) == "hello", (
+        f"py_msg1_back.value exists: {hasattr(py_msg1_back, 'value')}, value: {getattr(py_msg1_back, 'value', None)}, expected: hello"
+    )
 
     # Test with int value
     py_msg2 = UnionMessage(name="test", value=42)
     proto_msg2 = convert_python_message_to_proto(py_msg2, UnionMessage, pb2_module)
     py_msg2_back = converter(proto_msg2)
-    assert getattr(py_msg2_back, "name", None) == "test", f"py_msg2_back.name exists: {hasattr(py_msg2_back, 'name')}, value: {getattr(py_msg2_back, 'name', None)}, expected: test"
-    assert getattr(py_msg2_back, "value", None) == 42, f"py_msg2_back.value exists: {hasattr(py_msg2_back, 'value')}, value: {getattr(py_msg2_back, 'value', None)}, expected: 42"
-    assert isinstance(getattr(py_msg2_back, "value", None), int), f"py_msg2_back.value exists: {hasattr(py_msg2_back, 'value')}, value: {getattr(py_msg2_back, 'value', None)}, expected: int"
+    assert getattr(py_msg2_back, "name", None) == "test", (
+        f"py_msg2_back.name exists: {hasattr(py_msg2_back, 'name')}, value: {getattr(py_msg2_back, 'name', None)}, expected: test"
+    )
+    assert getattr(py_msg2_back, "value", None) == 42, (
+        f"py_msg2_back.value exists: {hasattr(py_msg2_back, 'value')}, value: {getattr(py_msg2_back, 'value', None)}, expected: 42"
+    )
+    assert isinstance(getattr(py_msg2_back, "value", None), int), (
+        f"py_msg2_back.value exists: {hasattr(py_msg2_back, 'value')}, value: {getattr(py_msg2_back, 'value', None)}, expected: int"
+    )
 
 
 @pytest.mark.skipif(is_skip_generation(), reason="Skipping generation tests")
@@ -353,10 +378,22 @@ def test_bidirectional_conversion_nested(request: FixtureRequest):
     converter = generate_message_converter(OuterMessage)
     py_msg_back = converter(proto_msg)
 
-    assert getattr(py_msg_back, "name", None) == "outer", f"py_msg_back.name exists: {hasattr(py_msg_back, 'name')}, value: {getattr(py_msg_back, 'name', None)}, expected: outer"
-    assert getattr(getattr(py_msg_back, "inner", None), "value", None) == "inner_value", f"py_msg_back.inner.value exists: {hasattr(getattr(py_msg_back, 'inner', None), 'value')}, value: {getattr(getattr(py_msg_back, 'inner', None), 'value', None)}, expected: inner_value"
-    assert getattr(getattr(py_msg_back, "inner", None), "optional_number", None) == 10, f"py_msg_back.inner.optional_number exists: {hasattr(getattr(py_msg_back, 'inner', None), 'optional_number')}, value: {getattr(getattr(py_msg_back, 'inner', None), 'optional_number', None)}, expected: 10"
-    assert getattr(py_msg_back, "optional_inner", None) is None, f"py_msg_back.optional_inner exists: {hasattr(py_msg_back, 'optional_inner')}, value: {getattr(py_msg_back, 'optional_inner', None)}, expected: None"
+    assert getattr(py_msg_back, "name", None) == "outer", (
+        f"py_msg_back.name exists: {hasattr(py_msg_back, 'name')}, value: {getattr(py_msg_back, 'name', None)}, expected: outer"
+    )
+    assert (
+        getattr(getattr(py_msg_back, "inner", None), "value", None) == "inner_value"
+    ), (
+        f"py_msg_back.inner.value exists: {hasattr(getattr(py_msg_back, 'inner', None), 'value')}, value: {getattr(getattr(py_msg_back, 'inner', None), 'value', None)}, expected: inner_value"
+    )
+    assert (
+        getattr(getattr(py_msg_back, "inner", None), "optional_number", None) == 10
+    ), (
+        f"py_msg_back.inner.optional_number exists: {hasattr(getattr(py_msg_back, 'inner', None), 'optional_number')}, value: {getattr(getattr(py_msg_back, 'inner', None), 'optional_number', None)}, expected: 10"
+    )
+    assert getattr(py_msg_back, "optional_inner", None) is None, (
+        f"py_msg_back.optional_inner exists: {hasattr(py_msg_back, 'optional_inner')}, value: {getattr(py_msg_back, 'optional_inner', None)}, expected: None"
+    )
 
 
 @pytest.mark.skipif(is_skip_generation(), reason="Skipping generation tests")
@@ -383,16 +420,24 @@ def test_bidirectional_conversion_enum(request: FixtureRequest):
     converter = generate_message_converter(EnumMessage)
     py_msg_back = converter(proto_msg)
 
-    assert getattr(py_msg_back, "color", None) == Color.RED, f"py_msg_back.color exists: {hasattr(py_msg_back, 'color')}, value: {getattr(py_msg_back, 'color', None)}, expected: Color.RED"
-    assert getattr(py_msg_back, "optional_color", None) == Color.BLUE, f"py_msg_back.optional_color exists: {hasattr(py_msg_back, 'optional_color')}, value: {getattr(py_msg_back, 'optional_color', None)}, expected: Color.BLUE"
+    assert getattr(py_msg_back, "color", None) == Color.RED, (
+        f"py_msg_back.color exists: {hasattr(py_msg_back, 'color')}, value: {getattr(py_msg_back, 'color', None)}, expected: Color.RED"
+    )
+    assert getattr(py_msg_back, "optional_color", None) == Color.BLUE, (
+        f"py_msg_back.optional_color exists: {hasattr(py_msg_back, 'optional_color')}, value: {getattr(py_msg_back, 'optional_color', None)}, expected: Color.BLUE"
+    )
 
     # Test with None optional enum
     py_msg2 = EnumMessage(color=Color.GREEN)
     proto_msg2 = convert_python_message_to_proto(py_msg2, EnumMessage, pb2_module)
     py_msg2_back = converter(proto_msg2)
 
-    assert getattr(py_msg2_back, "color", None) == Color.GREEN, f"py_msg2_back.color exists: {hasattr(py_msg2_back, 'color')}, value: {getattr(py_msg2_back, 'color', None)}, expected: Color.GREEN"
-    assert getattr(py_msg2_back, "optional_color", None) is None, f"py_msg2_back.optional_color exists: {hasattr(py_msg2_back, 'optional_color')}, value: {getattr(py_msg2_back, 'optional_color', None)}, expected: None"
+    assert getattr(py_msg2_back, "color", None) == Color.GREEN, (
+        f"py_msg2_back.color exists: {hasattr(py_msg2_back, 'color')}, value: {getattr(py_msg2_back, 'color', None)}, expected: Color.GREEN"
+    )
+    assert getattr(py_msg2_back, "optional_color", None) is None, (
+        f"py_msg2_back.optional_color exists: {hasattr(py_msg2_back, 'optional_color')}, value: {getattr(py_msg2_back, 'optional_color', None)}, expected: None"
+    )
 
 
 def test_invalid_message_no_annotation():
@@ -416,8 +461,12 @@ def test_validation_error_handling():
 
     # This should work
     msg = ValidatedMessage(name="test", age=25)
-    assert getattr(msg, "name", None) == "test", f"msg.name exists: {hasattr(msg, 'name')}, value: {getattr(msg, 'name', None)}, expected: test"
-    assert getattr(msg, "age", None) == 25, f"msg.age exists: {hasattr(msg, 'age')}, value: {getattr(msg, 'age', None)}, expected: 25"
+    assert getattr(msg, "name", None) == "test", (
+        f"msg.name exists: {hasattr(msg, 'name')}, value: {getattr(msg, 'name', None)}, expected: test"
+    )
+    assert getattr(msg, "age", None) == 25, (
+        f"msg.age exists: {hasattr(msg, 'age')}, value: {getattr(msg, 'age', None)}, expected: 25"
+    )
 
     # This should raise ValidationError
     with pytest.raises(ValidationError):
@@ -471,5 +520,254 @@ def test_bidirectional_conversion_collections(request: FixtureRequest):
     converter = generate_message_converter(CollectionMessage)
     py_msg_back = converter(proto_msg)
 
-    assert getattr(py_msg_back, "tags", None) == ["tag1", "tag2", "tag3"], f"py_msg_back.tags exists: {hasattr(py_msg_back, 'tags')}, value: {getattr(py_msg_back, 'tags', None)}, expected: ['tag1', 'tag2', 'tag3']"
-    assert getattr(py_msg_back, "scores", None) == {"a": 1, "b": 2, "c": 3}, f"py_msg_back.scores exists: {hasattr(py_msg_back, 'scores')}, value: {getattr(py_msg_back, 'scores', None)}, expected: {'a': 1, 'b': 2, 'c': 3}"
+    assert getattr(py_msg_back, "tags", None) == ["tag1", "tag2", "tag3"], (
+        f"py_msg_back.tags exists: {hasattr(py_msg_back, 'tags')}, value: {getattr(py_msg_back, 'tags', None)}, expected: ['tag1', 'tag2', 'tag3']"
+    )
+    assert getattr(py_msg_back, "scores", None) == {"a": 1, "b": 2, "c": 3}, (
+        f"py_msg_back.scores exists: {hasattr(py_msg_back, 'scores')}, value: {getattr(py_msg_back, 'scores', None)}, expected: {'a': 1, 'b': 2, 'c': 3}"
+    )
+
+
+def test_reserved_fields_default():
+    """Test that no reserved fields are added by default."""
+
+    class SimpleMessage(Message):
+        name: str
+        value: int
+
+    class DummyService:
+        def test_method(self, req: SimpleMessage) -> SimpleMessage:
+            return req
+
+    # Test without setting environment variable
+    proto = generate_proto(DummyService())
+    assert "reserved" not in proto
+    assert "Reserved fields" not in proto
+
+
+def test_reserved_fields_single():
+    """Test adding a single reserved field."""
+
+    class SimpleMessage(Message):
+        name: str
+        value: int
+
+    class DummyService:
+        def test_method(self, req: SimpleMessage) -> SimpleMessage:
+            return req
+
+    # Test with 1 reserved field
+    with mock.patch.dict(os.environ, {"PYDANTIC_RPC_RESERVED_FIELDS": "1"}):
+        proto = generate_proto(DummyService())
+        assert "// Reserved fields for future compatibility" in proto
+        assert "reserved 3;" in proto
+
+
+def test_reserved_fields_multiple():
+    """Test adding multiple reserved fields."""
+
+    class SimpleMessage(Message):
+        name: str
+        value: int
+
+    class DummyService:
+        def test_method(self, req: SimpleMessage) -> SimpleMessage:
+            return req
+
+    # Test with 5 reserved fields
+    with mock.patch.dict(os.environ, {"PYDANTIC_RPC_RESERVED_FIELDS": "5"}):
+        proto = generate_proto(DummyService())
+        assert "// Reserved fields for future compatibility" in proto
+        assert "reserved 3 to 7;" in proto
+
+
+def test_reserved_fields_with_complex_message():
+    """Test reserved fields with a more complex message containing unions and optionals."""
+
+    class ComplexMessage(Message):
+        name: str
+        value: Union[str, int]
+        optional_field: Optional[str]
+        tags: list[str]
+
+    class DummyService:
+        def test_method(self, req: ComplexMessage) -> ComplexMessage:
+            return req
+
+    # Test with 3 reserved fields
+    with mock.patch.dict(os.environ, {"PYDANTIC_RPC_RESERVED_FIELDS": "3"}):
+        proto = generate_proto(DummyService())
+        assert "// Reserved fields for future compatibility" in proto
+        # Complex message has: name=1, value oneof (2,3), optional_field=4, tags=5
+        # So reserved should start at 6
+        assert "reserved 6 to 8;" in proto
+
+
+def test_reserved_fields_large_number():
+    """Test adding a large number of reserved fields."""
+
+    class SimpleMessage(Message):
+        name: str
+
+    class DummyService:
+        def test_method(self, req: SimpleMessage) -> SimpleMessage:
+            return req
+
+    # Test with 50 reserved fields
+    with mock.patch.dict(os.environ, {"PYDANTIC_RPC_RESERVED_FIELDS": "50"}):
+        proto = generate_proto(DummyService())
+        assert "// Reserved fields for future compatibility" in proto
+        assert "reserved 2 to 51;" in proto
+
+
+def test_reserved_fields_zero():
+    """Test that setting reserved fields to 0 doesn't add any."""
+
+    class SimpleMessage(Message):
+        name: str
+
+    class DummyService:
+        def test_method(self, req: SimpleMessage) -> SimpleMessage:
+            return req
+
+    # Test with 0 reserved fields
+    with mock.patch.dict(os.environ, {"PYDANTIC_RPC_RESERVED_FIELDS": "0"}):
+        proto = generate_proto(DummyService())
+        assert "reserved" not in proto
+        assert "Reserved fields" not in proto
+
+
+def test_reserved_fields_invalid_value():
+    """Test that invalid values for reserved fields default to 0."""
+
+    class SimpleMessage(Message):
+        name: str
+
+    class DummyService:
+        def test_method(self, req: SimpleMessage) -> SimpleMessage:
+            return req
+
+    # Test with invalid string value
+    with mock.patch.dict(os.environ, {"PYDANTIC_RPC_RESERVED_FIELDS": "invalid"}):
+        proto = generate_proto(DummyService())
+        assert "reserved" not in proto
+        assert "Reserved fields" not in proto
+
+    # Test with negative value
+    with mock.patch.dict(os.environ, {"PYDANTIC_RPC_RESERVED_FIELDS": "-5"}):
+        proto = generate_proto(DummyService())
+        assert "reserved" not in proto
+        assert "Reserved fields" not in proto
+
+
+def test_reserved_fields_nested_messages():
+    """Test that reserved fields are added to all message types in nested scenarios."""
+
+    class InnerMessage(Message):
+        value: str
+
+    class OuterMessage(Message):
+        name: str
+        inner: InnerMessage
+
+    class DummyService:
+        def test_method(self, req: OuterMessage) -> OuterMessage:
+            return req
+
+    # Test with 2 reserved fields
+    with mock.patch.dict(os.environ, {"PYDANTIC_RPC_RESERVED_FIELDS": "2"}):
+        proto = generate_proto(DummyService())
+
+        # Should have reserved fields in both message types
+        reserved_occurrences = proto.count(
+            "// Reserved fields for future compatibility"
+        )
+        assert reserved_occurrences == 2
+
+        # InnerMessage has value=1, so reserved should be 2 to 3
+        assert "reserved 2 to 3;" in proto
+
+        # OuterMessage has name=1, inner=2, so reserved should be 3 to 4
+        assert "reserved 3 to 4;" in proto
+
+
+def test_reserved_fields_with_enums():
+    """Test reserved fields with messages containing enums."""
+
+    class Status(enum.Enum):
+        ACTIVE = 0
+        INACTIVE = 1
+
+    class MessageWithEnum(Message):
+        name: str
+        status: Status
+
+    class DummyService:
+        def test_method(self, req: MessageWithEnum) -> MessageWithEnum:
+            return req
+
+    # Test with 3 reserved fields
+    with mock.patch.dict(os.environ, {"PYDANTIC_RPC_RESERVED_FIELDS": "3"}):
+        proto = generate_proto(DummyService())
+
+        # Should have enum definition
+        assert "enum Status {" in proto
+
+        # Should have reserved fields in message
+        assert "// Reserved fields for future compatibility" in proto
+        # Message has name=1, status=2, so reserved should be 3 to 5
+        assert "reserved 3 to 5;" in proto
+
+
+@pytest.mark.skipif(is_skip_generation(), reason="Skipping generation tests")
+def test_reserved_fields_compilation(request: FixtureRequest):
+    """Test that proto files with reserved fields compile correctly."""
+
+    class SimpleMessage(Message):
+        name: str
+        value: int
+
+    class DummyService:
+        def test_method(self, req: SimpleMessage) -> SimpleMessage:
+            return req
+
+    # Test with reserved fields - should compile without errors
+    with mock.patch.dict(os.environ, {"PYDANTIC_RPC_RESERVED_FIELDS": "5"}):
+        try:
+            pb2_grpc_module, pb2_module = generate_and_compile_proto(
+                DummyService(), request.node.unique_package_name
+            )
+            # If we get here without exception, compilation was successful
+            assert pb2_grpc_module is not None
+            assert pb2_module is not None
+        except Exception as e:
+            pytest.fail(f"Proto compilation failed with reserved fields: {e}")
+
+
+def test_get_reserved_fields_count_function():
+    """Test the get_reserved_fields_count function directly."""
+    from pydantic_rpc.core import get_reserved_fields_count
+
+    # Test default (no env var)
+    with mock.patch.dict(os.environ, {}, clear=True):
+        assert get_reserved_fields_count() == 0
+
+    # Test valid values
+    with mock.patch.dict(os.environ, {"PYDANTIC_RPC_RESERVED_FIELDS": "10"}):
+        assert get_reserved_fields_count() == 10
+
+    with mock.patch.dict(os.environ, {"PYDANTIC_RPC_RESERVED_FIELDS": "1"}):
+        assert get_reserved_fields_count() == 1
+
+    with mock.patch.dict(os.environ, {"PYDANTIC_RPC_RESERVED_FIELDS": "0"}):
+        assert get_reserved_fields_count() == 0
+
+    # Test invalid values
+    with mock.patch.dict(os.environ, {"PYDANTIC_RPC_RESERVED_FIELDS": "invalid"}):
+        assert get_reserved_fields_count() == 0
+
+    with mock.patch.dict(os.environ, {"PYDANTIC_RPC_RESERVED_FIELDS": ""}):
+        assert get_reserved_fields_count() == 0
+
+    with mock.patch.dict(os.environ, {"PYDANTIC_RPC_RESERVED_FIELDS": "-5"}):
+        assert get_reserved_fields_count() == 0

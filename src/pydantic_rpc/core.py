@@ -1095,6 +1095,18 @@ def generate_message_definition(
         fields.append(field_definition)
         index += 1
 
+    # Add reserved fields for forward/backward compatibility if specified
+    reserved_count = get_reserved_fields_count()
+    if reserved_count > 0:
+        start_reserved = index
+        end_reserved = index + reserved_count - 1
+        fields.append("")
+        fields.append("// Reserved fields for future compatibility")
+        if reserved_count == 1:
+            fields.append(f"reserved {start_reserved};")
+        else:
+            fields.append(f"reserved {start_reserved} to {end_reserved};")
+
     msg_def = f"message {message_type.__name__} {{\n{indent_lines(fields)}\n}}"
     return msg_def, refs
 
@@ -1426,6 +1438,14 @@ def get_rpc_methods(obj: object) -> list[tuple[str, Callable[..., Any]]]:
 def is_skip_generation() -> bool:
     """Check if the proto file and code generation should be skipped."""
     return os.getenv("PYDANTIC_RPC_SKIP_GENERATION", "false").lower() == "true"
+
+
+def get_reserved_fields_count() -> int:
+    """Get the number of reserved fields to add to each message from environment variable."""
+    try:
+        return max(0, int(os.getenv("PYDANTIC_RPC_RESERVED_FIELDS", "0")))
+    except ValueError:
+        return 0
 
 
 def generate_and_compile_proto(
