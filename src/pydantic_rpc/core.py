@@ -10,22 +10,20 @@ import time
 import types
 from collections.abc import AsyncIterator, Awaitable, Callable
 from concurrent import futures
+from pathlib import Path
 from posixpath import basename
 from typing import (
     Any,
     Type,
     TypeAlias,
     Union,
-    cast,
     get_args,
     get_origin,
 )
-from pathlib import Path
 
 import annotated_types
 import grpc
 import grpc_tools
-from grpc_tools import protoc
 from connecpy.asgi import ConnecpyASGIApp as ConnecpyASGI
 from connecpy.errors import Errors
 from connecpy.wsgi import ConnecpyWSGIApp as ConnecpyWSGI
@@ -33,11 +31,12 @@ from connecpy.wsgi import ConnecpyWSGIApp as ConnecpyWSGI
 # Protobuf Python modules for Timestamp, Duration (requires protobuf / grpcio)
 from google.protobuf import duration_pb2, timestamp_pb2
 from grpc_health.v1 import health_pb2, health_pb2_grpc
+from grpc_health.v1.health import HealthServicer
 from grpc_reflection.v1alpha import reflection
+from grpc_tools import protoc
 from pydantic import BaseModel, ValidationError
 from sonora.asgi import grpcASGI
 from sonora.wsgi import grpcWSGI
-from grpc_health.v1.health import HealthServicer
 
 ###############################################################################
 # 1. Message definitions & converter extensions
@@ -151,8 +150,66 @@ def generate_message_converter(arg_type: Type[Message]) -> Callable[[Any], Messa
 
     def converter(request: Any) -> Message:
         rdict = {}
-        for field in fields.keys():
-            rdict[field] = converters[field](getattr(request, field))
+        for field_name, field_info in fields.items():
+            field_type = field_info.annotation
+
+            # Check if this is a union type
+            if field_type is not None and is_union_type(field_type):
+                union_args = flatten_union(field_type)
+                has_none = type(None) in union_args
+                non_none_args = [arg for arg in union_args if arg is not type(None)]
+
+                if has_none and len(non_none_args) == 1:
+                    # This is Optional[T] - check if protobuf field is set
+                    try:
+                        if hasattr(request, "HasField") and request.HasField(
+                            field_name
+                        ):
+                            rdict[field_name] = converters[field_name](
+                                getattr(request, field_name)
+                            )
+                        else:
+                            # Field not set in protobuf, set to None for Optional fields
+                            rdict[field_name] = None
+                    except ValueError:
+                        # HasField doesn't work for this field type (e.g., repeated fields)
+                        # Fall back to regular conversion
+                        rdict[field_name] = converters[field_name](
+                            getattr(request, field_name)
+                        )
+                elif len(non_none_args) > 1:
+                    # This is a oneof field (Union[str, int] etc.)
+                    # Check which oneof field is set
+                    try:
+                        which_field = request.WhichOneof(field_name)
+                        if which_field:
+                            # Extract the value from the set oneof field
+                            proto_value = getattr(request, which_field)
+
+                            # Determine the Python type from the oneof field name
+                            # e.g., "value_string" -> str, "value_int32" -> int
+                            for union_arg in non_none_args:
+                                proto_typename = protobuf_type_mapping(union_arg)
+                                if (
+                                    proto_typename
+                                    and which_field
+                                    == f"{field_name}_{proto_typename.replace('.', '_')}"
+                                ):
+                                    # Convert using the specific type converter
+                                    type_converter = generate_converter(union_arg)
+                                    rdict[field_name] = type_converter(proto_value)
+                                    break
+                    except (AttributeError, ValueError):
+                        # WhichOneof failed, try fallback
+                        # This shouldn't happen for properly generated oneof fields
+                        pass
+                else:
+                    # Union with only None type (shouldn't happen)
+                    pass
+            else:
+                # For non-union fields, convert normally
+                rdict[field_name] = converters[field_name](getattr(request, field_name))
+
         return arg_type(**rdict)
 
     return converter
@@ -281,32 +338,145 @@ def connect_obj_with_stub_async(
         pass
 
     def implement_stub_method(
-        method: Callable[..., AsyncIterator[Message] | Awaitable[Message]],
+        method: Callable[..., Any],
     ) -> Callable[[object, Any, Any], Any]:
         sig = inspect.signature(method)
-        arg_type = get_request_arg_type(sig)
-        converter = generate_message_converter(arg_type)
+        input_type = get_request_arg_type(sig)
+        is_input_stream = is_stream_type(input_type)
         response_type = sig.return_annotation
+        is_output_stream = is_stream_type(response_type)
         size_of_parameters = len(sig.parameters)
 
-        if is_stream_type(response_type):
-            method = cast(Callable[..., AsyncIterator[Message]], method)
-            item_type = get_args(response_type)[0]
-            match size_of_parameters:
-                case 1:
+        if size_of_parameters not in (1, 2):
+            raise TypeError(
+                f"Method '{method.__name__}' must have 1 or 2 parameters, got {size_of_parameters}"
+            )
 
-                    async def stub_method_stream1(
+        if is_input_stream:
+            input_item_type = get_args(input_type)[0]
+            item_converter = generate_message_converter(input_item_type)
+
+            async def convert_iterator(
+                proto_iter: AsyncIterator[Any],
+            ) -> AsyncIterator[Message]:
+                async for proto in proto_iter:
+                    yield item_converter(proto)
+
+            if is_output_stream:
+                # stream-stream
+                output_item_type = get_args(response_type)[0]
+
+                if size_of_parameters == 1:
+
+                    async def stub_method(
+                        self: object,
+                        request_iterator: AsyncIterator[Any],
+                        context: Any,
+                    ) -> AsyncIterator[Any]:
+                        _ = self
+                        try:
+                            arg_iter = convert_iterator(request_iterator)
+                            async for resp_obj in method(arg_iter):
+                                yield convert_python_message_to_proto(
+                                    resp_obj, output_item_type, pb2_module
+                                )
+                        except ValidationError as e:
+                            await context.abort(
+                                grpc.StatusCode.INVALID_ARGUMENT, str(e)
+                            )
+                        except Exception as e:
+                            await context.abort(grpc.StatusCode.INTERNAL, str(e))
+
+                else:  # size_of_parameters == 2
+
+                    async def stub_method(
+                        self: object,
+                        request_iterator: AsyncIterator[Any],
+                        context: Any,
+                    ) -> AsyncIterator[Any]:
+                        _ = self
+                        try:
+                            arg_iter = convert_iterator(request_iterator)
+                            async for resp_obj in method(arg_iter, context):
+                                yield convert_python_message_to_proto(
+                                    resp_obj, output_item_type, pb2_module
+                                )
+                        except ValidationError as e:
+                            await context.abort(
+                                grpc.StatusCode.INVALID_ARGUMENT, str(e)
+                            )
+                        except Exception as e:
+                            await context.abort(grpc.StatusCode.INTERNAL, str(e))
+
+                return stub_method
+
+            else:
+                # stream-unary
+                if size_of_parameters == 1:
+
+                    async def stub_method(
+                        self: object,
+                        request_iterator: AsyncIterator[Any],
+                        context: Any,
+                    ) -> Any:
+                        _ = self
+                        try:
+                            arg_iter = convert_iterator(request_iterator)
+                            resp_obj = await method(arg_iter)
+                            return convert_python_message_to_proto(
+                                resp_obj, response_type, pb2_module
+                            )
+                        except ValidationError as e:
+                            await context.abort(
+                                grpc.StatusCode.INVALID_ARGUMENT, str(e)
+                            )
+                        except Exception as e:
+                            await context.abort(grpc.StatusCode.INTERNAL, str(e))
+
+                else:  # size_of_parameters == 2
+
+                    async def stub_method(
+                        self: object,
+                        request_iterator: AsyncIterator[Any],
+                        context: Any,
+                    ) -> Any:
+                        _ = self
+                        try:
+                            arg_iter = convert_iterator(request_iterator)
+                            resp_obj = await method(arg_iter, context)
+                            return convert_python_message_to_proto(
+                                resp_obj, response_type, pb2_module
+                            )
+                        except ValidationError as e:
+                            await context.abort(
+                                grpc.StatusCode.INVALID_ARGUMENT, str(e)
+                            )
+                        except Exception as e:
+                            await context.abort(grpc.StatusCode.INTERNAL, str(e))
+
+                return stub_method
+
+        else:
+            # unary input
+            converter = generate_message_converter(input_type)
+
+            if is_output_stream:
+                # unary-stream
+                output_item_type = get_args(response_type)[0]
+
+                if size_of_parameters == 1:
+
+                    async def stub_method(
                         self: object,
                         request: Any,
                         context: Any,
-                        method: Callable[..., AsyncIterator[Message]] = method,
                     ) -> AsyncIterator[Any]:
                         _ = self
                         try:
                             arg = converter(request)
                             async for resp_obj in method(arg):
                                 yield convert_python_message_to_proto(
-                                    resp_obj, item_type, pb2_module
+                                    resp_obj, output_item_type, pb2_module
                                 )
                         except ValidationError as e:
                             await context.abort(
@@ -315,21 +485,19 @@ def connect_obj_with_stub_async(
                         except Exception as e:
                             await context.abort(grpc.StatusCode.INTERNAL, str(e))
 
-                    return stub_method_stream1
-                case 2:
+                else:  # size_of_parameters == 2
 
-                    async def stub_method_stream2(
+                    async def stub_method(
                         self: object,
                         request: Any,
                         context: Any,
-                        method: Callable[..., AsyncIterator[Message]] = method,
                     ) -> AsyncIterator[Any]:
                         _ = self
                         try:
                             arg = converter(request)
                             async for resp_obj in method(arg, context):
                                 yield convert_python_message_to_proto(
-                                    resp_obj, item_type, pb2_module
+                                    resp_obj, output_item_type, pb2_module
                                 )
                         except ValidationError as e:
                             await context.abort(
@@ -338,59 +506,53 @@ def connect_obj_with_stub_async(
                         except Exception as e:
                             await context.abort(grpc.StatusCode.INTERNAL, str(e))
 
-                    return stub_method_stream2
-                case _:
-                    raise Exception("Method must have exactly one or two parameters")
+                return stub_method
 
-        match size_of_parameters:
-            case 1:
-                method = cast(Callable[..., Awaitable[Message]], method)
+            else:
+                # unary-unary
+                if size_of_parameters == 1:
 
-                async def stub_method1(
-                    self: object,
-                    request: Any,
-                    context: Any,
-                    method: Callable[..., Awaitable[Message]] = method,
-                ) -> Any:
-                    _ = self
-                    try:
-                        arg = converter(request)
-                        resp_obj = await method(arg)
-                        return convert_python_message_to_proto(
-                            resp_obj, response_type, pb2_module
-                        )
-                    except ValidationError as e:
-                        await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(e))
-                    except Exception as e:
-                        await context.abort(grpc.StatusCode.INTERNAL, str(e))
+                    async def stub_method(
+                        self: object,
+                        request: Any,
+                        context: Any,
+                    ) -> Any:
+                        _ = self
+                        try:
+                            arg = converter(request)
+                            resp_obj = await method(arg)
+                            return convert_python_message_to_proto(
+                                resp_obj, response_type, pb2_module
+                            )
+                        except ValidationError as e:
+                            await context.abort(
+                                grpc.StatusCode.INVALID_ARGUMENT, str(e)
+                            )
+                        except Exception as e:
+                            await context.abort(grpc.StatusCode.INTERNAL, str(e))
 
-                return stub_method1
+                else:  # size_of_parameters == 2
 
-            case 2:
-                method = cast(Callable[..., Awaitable[Message]], method)
+                    async def stub_method(
+                        self: object,
+                        request: Any,
+                        context: Any,
+                    ) -> Any:
+                        _ = self
+                        try:
+                            arg = converter(request)
+                            resp_obj = await method(arg, context)
+                            return convert_python_message_to_proto(
+                                resp_obj, response_type, pb2_module
+                            )
+                        except ValidationError as e:
+                            await context.abort(
+                                grpc.StatusCode.INVALID_ARGUMENT, str(e)
+                            )
+                        except Exception as e:
+                            await context.abort(grpc.StatusCode.INTERNAL, str(e))
 
-                async def stub_method2(
-                    self: object,
-                    request: Any,
-                    context: Any,
-                    method: Callable[..., Awaitable[Message]] = method,
-                ) -> Any:
-                    _ = self
-                    try:
-                        arg = converter(request)
-                        resp_obj = await method(arg, context)
-                        return convert_python_message_to_proto(
-                            resp_obj, response_type, pb2_module
-                        )
-                    except ValidationError as e:
-                        await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(e))
-                    except Exception as e:
-                        await context.abort(grpc.StatusCode.INTERNAL, str(e))
-
-                return stub_method2
-
-            case _:
-                raise Exception("Method must have exactly one or two parameters")
+                return stub_method
 
     for method_name, method in get_rpc_methods(obj):
         if method.__name__.startswith("_"):
@@ -933,6 +1095,18 @@ def generate_message_definition(
         fields.append(field_definition)
         index += 1
 
+    # Add reserved fields for forward/backward compatibility if specified
+    reserved_count = get_reserved_fields_count()
+    if reserved_count > 0:
+        start_reserved = index
+        end_reserved = index + reserved_count - 1
+        fields.append("")
+        fields.append("// Reserved fields for future compatibility")
+        if reserved_count == 1:
+            fields.append(f"reserved {start_reserved};")
+        else:
+            fields.append(f"reserved {start_reserved} to {end_reserved};")
+
     msg_def = f"message {message_type.__name__} {{\n{indent_lines(fields)}\n}}"
     return msg_def, refs
 
@@ -1024,15 +1198,26 @@ def generate_proto(obj: object, package_name: str = "") -> str:
             for comment_line in comment_out(method_docstr):
                 rpc_definitions.append(comment_line)
 
-        if is_stream_type(response_type):
-            item_type = get_args(response_type)[0]
-            rpc_definitions.append(
-                f"rpc {method_name} ({request_type.__name__}) returns (stream {item_type.__name__});"
-            )
-        else:
-            rpc_definitions.append(
-                f"rpc {method_name} ({request_type.__name__}) returns ({response_type.__name__});"
-            )
+        input_type = request_type
+        input_is_stream = is_stream_type(input_type)
+        output_is_stream = is_stream_type(response_type)
+        input_msg_type = get_args(input_type)[0] if input_is_stream else input_type
+        output_msg_type = (
+            get_args(response_type)[0] if output_is_stream else response_type
+        )
+        input_str = (
+            f"stream {input_msg_type.__name__}"
+            if input_is_stream
+            else input_msg_type.__name__
+        )
+        output_str = (
+            f"stream {output_msg_type.__name__}"
+            if output_is_stream
+            else output_msg_type.__name__
+        )
+        rpc_definitions.append(
+            f"rpc {method_name} ({input_str}) returns ({output_str});"
+        )
 
     if not package_name:
         if service_name.endswith("Service"):
@@ -1255,11 +1440,19 @@ def is_skip_generation() -> bool:
     return os.getenv("PYDANTIC_RPC_SKIP_GENERATION", "false").lower() == "true"
 
 
+def get_reserved_fields_count() -> int:
+    """Get the number of reserved fields to add to each message from environment variable."""
+    try:
+        return max(0, int(os.getenv("PYDANTIC_RPC_RESERVED_FIELDS", "0")))
+    except ValueError:
+        return 0
+
+
 def generate_and_compile_proto(
     obj: object,
     package_name: str = "",
     existing_proto_path: Path | None = None,
-) -> tuple[Any, Any] | None:
+) -> tuple[Any, Any]:
     if is_skip_generation():
         import importlib
 

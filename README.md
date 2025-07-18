@@ -274,6 +274,14 @@ By default your files will be generated in the current working directory where y
 export PYDANTIC_RPC_PROTO_PATH=/your/path
 ```
 
+## ⚠️ Reserved Fields
+
+You can also set an environment variable to reserve a set number of fields for proto generation, for backward and forward compatibility.
+
+```bash
+export PYDANTIC_RPC_RESERVED_FIELDS=1
+```
+
 ## 💎 Advanced Features
 
 ### 🌊 Response Streaming
@@ -874,16 +882,16 @@ This approach works because protobuf allows message types within `oneof` fields,
 
 
 ## TODO
-- [ ] Streaming Support
+- [x] Streaming Support
   - [x] unary-stream
-  - [ ] stream-unary
-  - [ ] stream-stream
+  - [x] stream-unary
+  - [x] stream-stream
 - [ ] Betterproto Support
 - [ ] Sonora-connect Support
 - [ ] Custom Health Check Support
 - [x] MCP (Model Context Protocol) Support via official MCP SDK
 - [ ] Add more examples
-- [ ] Add tests
+- [x] Add tests
 
 ## 📜 License
 
