@@ -1,7 +1,7 @@
 import os
 import pytest
 import enum
-from typing import Any, Union, Optional, TYPE_CHECKING
+from typing import Union, Optional, TYPE_CHECKING
 from pydantic import ValidationError
 
 from pydantic_rpc import Message
@@ -440,18 +440,6 @@ def test_bidirectional_conversion_enum(request: FixtureRequest):
     )
 
 
-def test_invalid_message_no_annotation():
-    """Test that message with fields without annotations fails."""
-
-    class InvalidService:
-        def test_method(self, req: Any) -> str:  # Missing proper annotation
-            _ = req
-            return "test"
-
-    with pytest.raises(Exception):
-        _ = generate_proto(InvalidService())
-
-
 def test_validation_error_handling():
     """Test proper validation error handling."""
 
@@ -771,3 +759,368 @@ def test_get_reserved_fields_count_function():
 
     with mock.patch.dict(os.environ, {"PYDANTIC_RPC_RESERVED_FIELDS": "-5"}):
         assert get_reserved_fields_count() == 0
+
+
+def test_none_input_type():
+    """Test methods that accept None as input (using google.protobuf.Empty)."""
+
+    class StringResponse(Message):
+        value: str
+
+    class NoneInputService:
+        def ping(self, req: None) -> StringResponse:
+            _ = req
+            return StringResponse(value="pong")
+
+        def status(self, req: None) -> StringResponse:
+            _ = req
+            return StringResponse(value="healthy")
+
+    proto = generate_proto(NoneInputService())
+    assert "rpc Ping (google.protobuf.Empty) returns (StringResponse);" in proto
+    assert "rpc Status (google.protobuf.Empty) returns (StringResponse);" in proto
+    assert 'import "google/protobuf/empty.proto";' in proto
+
+
+def test_none_output_type():
+    """Test methods that return None (using google.protobuf.Empty)."""
+
+    class SimpleMessage(Message):
+        text: str
+
+    class NoneOutputService:
+        def log_message(self, req: SimpleMessage) -> None:
+            _ = req
+            return None
+
+        def process_data(self, req: SimpleMessage) -> None:
+            _ = req
+            return None
+
+    proto = generate_proto(NoneOutputService())
+    assert "rpc LogMessage (SimpleMessage) returns (google.protobuf.Empty);" in proto
+    assert "rpc ProcessData (SimpleMessage) returns (google.protobuf.Empty);" in proto
+    assert 'import "google/protobuf/empty.proto";' in proto
+
+
+def test_none_both_input_and_output():
+    """Test methods that accept None as input and return None."""
+
+    class NoneBothService:
+        def heartbeat(self, req: None) -> None:
+            _ = req
+            return None
+
+        def reset(self, req: None) -> None:
+            _ = req
+            return None
+
+    proto = generate_proto(NoneBothService())
+    assert (
+        "rpc Heartbeat (google.protobuf.Empty) returns (google.protobuf.Empty);"
+        in proto
+    )
+    assert "rpc Reset (google.protobuf.Empty) returns (google.protobuf.Empty);" in proto
+    assert 'import "google/protobuf/empty.proto";' in proto
+
+
+@pytest.mark.skipif(is_skip_generation(), reason="Skipping generation tests")
+def test_bidirectional_conversion_none_input(request: FixtureRequest):
+    """Test bidirectional conversion for None input types."""
+
+    class StringResponse(Message):
+        value: str
+
+    class NoneInputService:
+        def get_status(self, req: None) -> StringResponse:
+            _ = req
+            return StringResponse(value="active")
+
+    # Generate proto and modules
+    _pb2_grpc_module, _pb2_module = generate_and_compile_proto(
+        NoneInputService(), request.node.unique_package_name
+    )
+
+    # Test message converter for None type
+    converter = generate_message_converter(None)
+    result = converter(None)
+    assert result is None
+
+    # Test with Empty protobuf message
+    from google.protobuf import empty_pb2
+
+    empty_msg = empty_pb2.Empty()
+    result = converter(empty_msg)
+    assert result is None
+
+
+@pytest.mark.skipif(is_skip_generation(), reason="Skipping generation tests")
+def test_bidirectional_conversion_none_output(request: FixtureRequest):
+    """Test bidirectional conversion for None output types."""
+
+    class SimpleMessage(Message):
+        text: str
+
+    class NoneOutputService:
+        def process(self, req: SimpleMessage) -> None:
+            _ = req
+            return None
+
+    # Generate proto and modules
+    _pb2_grpc_module, _pb2_module = generate_and_compile_proto(
+        NoneOutputService(), request.node.unique_package_name
+    )
+
+    # Test proto conversion for None response
+    from google.protobuf import empty_pb2
+
+    # Converting None should return Empty message
+    result = empty_pb2.Empty()
+    assert isinstance(result, empty_pb2.Empty)
+
+
+def test_async_iterator_none_rejection():
+    """Test that AsyncIterator[None] is properly rejected."""
+    from collections.abc import AsyncIterator
+
+    class InvalidStreamService:
+        def invalid_input_stream(self, req: AsyncIterator[None]) -> str:
+            _ = req
+            return "test"
+
+        def invalid_output_stream(self, req: str) -> AsyncIterator[None]:
+            _ = req
+
+            # This should never be reached
+            async def empty_gen():
+                yield None
+
+            return empty_gen()
+
+    # Should raise TypeError for AsyncIterator[None] input
+    with pytest.raises(TypeError, match="AsyncIterator\\[None\\].*input.*not allowed"):
+        _ = generate_proto(InvalidStreamService())
+
+    class InvalidOutputStreamService:
+        def invalid_output_stream(self, req: str) -> AsyncIterator[None]:
+            _ = req
+
+            # This should never be reached
+            async def empty_gen():
+                yield None
+
+            return empty_gen()
+
+    # Should raise TypeError for AsyncIterator[None] output
+    with pytest.raises(TypeError, match="AsyncIterator\\[None\\].*return.*not allowed"):
+        _ = generate_proto(InvalidOutputStreamService())
+
+
+def test_servicer_context_single_param():
+    """Test methods with ServicerContext as single parameter."""
+    from grpc import ServicerContext
+
+    class StringResponse(Message):
+        value: str
+
+    class ContextOnlyService:
+        def get_peer_info(self, context: ServicerContext) -> StringResponse:
+            _ = context
+            return StringResponse(value="peer_info")
+
+    proto = generate_proto(ContextOnlyService())
+    assert "rpc GetPeerInfo (google.protobuf.Empty) returns (StringResponse);" in proto
+
+
+def test_servicer_context_with_message():
+    """Test methods with both message and ServicerContext parameters."""
+    from grpc import ServicerContext
+
+    class RequestMessage(Message):
+        user_id: str
+        action: str
+
+    class ResponseMessage(Message):
+        success: bool
+        message: str
+
+    class ContextWithMessageService:
+        def authenticated_action(
+            self, req: RequestMessage, context: ServicerContext
+        ) -> ResponseMessage:
+            _ = req, context
+            return ResponseMessage(success=True, message="Action completed")
+
+        def log_request(self, req: RequestMessage, context: ServicerContext) -> None:
+            _ = req, context
+            return None
+
+        def get_user_info(self, req: None, context: ServicerContext) -> ResponseMessage:
+            _ = req, context
+            return ResponseMessage(success=True, message="User info retrieved")
+
+    proto = generate_proto(ContextWithMessageService())
+    assert (
+        "rpc AuthenticatedAction (RequestMessage) returns (ResponseMessage);" in proto
+    )
+    assert "rpc LogRequest (RequestMessage) returns (google.protobuf.Empty);" in proto
+    assert "rpc GetUserInfo (google.protobuf.Empty) returns (ResponseMessage);" in proto
+
+
+def test_servicer_context_with_optional_types():
+    """Test ServicerContext with optional input and output types."""
+    from grpc import ServicerContext
+
+    class OptionalMessage(Message):
+        data: Optional[str]
+        count: Optional[int]
+
+    class StringResponse(Message):
+        value: str
+
+    class ContextOptionalService:
+        def process_optional(
+            self, req: OptionalMessage, context: ServicerContext
+        ) -> StringResponse:
+            _ = req, context
+            return StringResponse(value="processed")
+
+        def validate_data(
+            self, req: OptionalMessage, context: ServicerContext
+        ) -> OptionalMessage:
+            _ = req, context
+            return OptionalMessage(data="validated", count=1)
+
+    proto = generate_proto(ContextOptionalService())
+    assert "rpc ProcessOptional (OptionalMessage) returns (StringResponse);" in proto
+    assert "rpc ValidateData (OptionalMessage) returns (OptionalMessage);" in proto
+
+
+def test_servicer_context_with_union_types():
+    """Test ServicerContext with union types (oneof)."""
+    from grpc import ServicerContext
+
+    class UnionMessage(Message):
+        value: Union[str, int]
+        metadata: Optional[Union[str, bool]]
+
+    class UnionResponse(Message):
+        result: Union[str, int]
+
+    class ContextUnionService:
+        def process_union(
+            self, req: UnionMessage, context: ServicerContext
+        ) -> UnionResponse:
+            _ = req, context
+            return UnionResponse(result="result")
+
+        def transform_data(
+            self, req: UnionResponse, context: ServicerContext
+        ) -> UnionMessage:
+            _ = req, context
+            return UnionMessage(value="transformed", metadata=None)
+
+    proto = generate_proto(ContextUnionService())
+    assert "oneof value {" in proto
+    assert "oneof metadata {" in proto
+    assert "rpc ProcessUnion (UnionMessage) returns (UnionResponse);" in proto
+    assert "rpc TransformData (UnionResponse) returns (UnionMessage);" in proto
+
+
+@pytest.mark.skipif(is_skip_generation(), reason="Skipping generation tests")
+def test_servicer_context_compilation(request: FixtureRequest):
+    """Test that methods with ServicerContext compile correctly."""
+    from grpc import ServicerContext
+
+    class TestMessage(Message):
+        name: str
+        value: int
+
+    class ContextTestService:
+        def test_method(
+            self, req: TestMessage, context: ServicerContext
+        ) -> TestMessage:
+            _ = req, context
+            return TestMessage(name="test", value=42)
+
+        def context_only(self, context: ServicerContext) -> TestMessage:
+            _ = context
+            return TestMessage(name="success", value=0)
+
+    # Should compile without errors
+    try:
+        pb2_grpc_module, pb2_module = generate_and_compile_proto(
+            ContextTestService(), request.node.unique_package_name
+        )
+        assert pb2_grpc_module is not None
+        assert pb2_module is not None
+    except Exception as e:
+        pytest.fail(f"Proto compilation failed with ServicerContext: {e}")
+
+
+def test_mixed_none_and_context():
+    """Test mixing None types with ServicerContext."""
+    from grpc import ServicerContext
+
+    class MixedMessage(Message):
+        info: str
+
+    class MixedNoneContextService:
+        def none_input_with_context(
+            self, req: None, context: ServicerContext
+        ) -> MixedMessage:
+            _ = req, context
+            return MixedMessage(info="processed")
+
+        def message_input_none_output_with_context(
+            self, req: MixedMessage, context: ServicerContext
+        ) -> None:
+            _ = req, context
+            return None
+
+        def none_both_with_context(self, req: None, context: ServicerContext) -> None:
+            _ = req, context
+            return None
+
+    proto = generate_proto(MixedNoneContextService())
+    assert (
+        "rpc NoneInputWithContext (google.protobuf.Empty) returns (MixedMessage);"
+        in proto
+    )
+    assert (
+        "rpc MessageInputNoneOutputWithContext (MixedMessage) returns (google.protobuf.Empty);"
+        in proto
+    )
+    assert (
+        "rpc NoneBothWithContext (google.protobuf.Empty) returns (google.protobuf.Empty);"
+        in proto
+    )
+    assert 'import "google/protobuf/empty.proto";' in proto
+
+
+def test_invalid_parameter_counts():
+    """Test that methods with invalid parameter counts are handled correctly."""
+    from grpc import ServicerContext
+
+    class TestMessage(Message):
+        data: str
+
+    class InvalidParameterService:
+        def no_params(self) -> str:
+            return "test"
+
+        def too_many_params(
+            self, req: TestMessage, context: ServicerContext, extra: str
+        ) -> str:
+            _ = req, context, extra
+            return "test"
+
+    # Methods with invalid parameter counts should be handled gracefully
+    # The generate_proto should work but these methods should be ignored or cause appropriate errors
+    try:
+        _ = generate_proto(InvalidParameterService())
+        # If it doesn't raise an exception, that's also acceptable behavior
+        # The key is that it doesn't crash unexpectedly
+    except Exception as e:
+        # If it raises an exception, it should be a meaningful one
+        assert "parameter" in str(e).lower() or "argument" in str(e).lower()

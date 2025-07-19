@@ -21,3 +21,4 @@ rpc_files/
 tests/**/*.py
 tests/**/*.pyi
 !tests/**/test_*.py
+.coverage

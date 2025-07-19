@@ -8,28 +8,30 @@ import signal
 import sys
 import time
 import types
+from typing import Union
 from collections.abc import AsyncIterator, Awaitable, Callable
 from concurrent import futures
 from pathlib import Path
 from posixpath import basename
 from typing import (
     Any,
-    Type,
     TypeAlias,
-    Union,
     get_args,
     get_origin,
+    cast,
+    TypeGuard,
 )
 
 import annotated_types
 import grpc
+from grpc import ServicerContext
 import grpc_tools
 from connecpy.asgi import ConnecpyASGIApp as ConnecpyASGI
 from connecpy.errors import Errors
 from connecpy.wsgi import ConnecpyWSGIApp as ConnecpyWSGI
 
 # Protobuf Python modules for Timestamp, Duration (requires protobuf / grpcio)
-from google.protobuf import duration_pb2, timestamp_pb2
+from google.protobuf import duration_pb2, timestamp_pb2, empty_pb2
 from grpc_health.v1 import health_pb2, health_pb2_grpc
 from grpc_health.v1.health import HealthServicer
 from grpc_reflection.v1alpha import reflection
@@ -46,6 +48,11 @@ from sonora.wsgi import grpcWSGI
 
 
 Message: TypeAlias = BaseModel
+
+
+def is_none_type(annotation: Any) -> TypeGuard[type[None] | None]:
+    """Check if annotation represents None/NoneType (handles both None and type(None))."""
+    return annotation is None or annotation is type(None)
 
 
 def primitiveProtoValueToPythonValue(value: Any):
@@ -77,11 +84,20 @@ def python_to_duration(td: datetime.timedelta) -> duration_pb2.Duration:  # type
     return d
 
 
-def generate_converter(annotation: Type[Any] | None) -> Callable[[Any], Any]:
+def generate_converter(annotation: type[Any] | None) -> Callable[[Any], Any]:
     """
     Returns a converter function to convert protobuf types to Python types.
     This is used primarily when handling incoming requests.
     """
+    # For NoneType (Empty messages)
+    if is_none_type(annotation):
+
+        def empty_converter(value: empty_pb2.Empty):  # type: ignore
+            _ = value
+            return None
+
+        return empty_converter
+
     # For primitive types
     if annotation in (int, str, bool, bytes, float):
         return primitiveProtoValueToPythonValue
@@ -139,9 +155,21 @@ def generate_converter(annotation: Type[Any] | None) -> Callable[[Any], Any]:
     return primitiveProtoValueToPythonValue
 
 
-def generate_message_converter(arg_type: Type[Message]) -> Callable[[Any], Message]:
+def generate_message_converter(
+    arg_type: type[Message] | type[None] | None,
+) -> Callable[[Any], Message | None]:
     """Return a converter function for protobuf -> Python Message."""
 
+    # Handle NoneType (Empty messages)
+    if is_none_type(arg_type):
+
+        def empty_converter(request: Any) -> None:
+            _ = request
+            return None
+
+        return empty_converter
+
+    arg_type = cast("type[Message]", arg_type)
     fields = arg_type.model_fields
     converters = {
         field: generate_converter(field_type.annotation)  # type: ignore
@@ -215,7 +243,7 @@ def generate_message_converter(arg_type: Type[Message]) -> Callable[[Any], Messa
     return converter
 
 
-def python_value_to_proto_value(field_type: Type[Any], value: Any) -> Any:
+def python_value_to_proto_value(field_type: type[Any], value: Any) -> Any:
     """
     Converts Python values to protobuf values.
     Used primarily when constructing a response object.
@@ -262,9 +290,9 @@ def connect_obj_with_stub(
         """
         sig = inspect.signature(method)
         arg_type = get_request_arg_type(sig)
-        converter = generate_message_converter(arg_type)
         response_type = sig.return_annotation
         param_count = len(sig.parameters)
+        converter = generate_message_converter(arg_type)
 
         if param_count == 1:
 
@@ -277,11 +305,18 @@ def connect_obj_with_stub(
             ) -> Any:
                 _ = self
                 try:
-                    arg = converter(request)
-                    resp_obj = original(arg)
-                    return convert_python_message_to_proto(
-                        resp_obj, response_type, pb2_module
-                    )
+                    if is_none_type(arg_type):
+                        resp_obj = original(None)  # Fixed: pass None instead of no args
+                    else:
+                        arg = converter(request)
+                        resp_obj = original(arg)
+
+                    if is_none_type(response_type):
+                        return empty_pb2.Empty()  # type: ignore
+                    else:
+                        return convert_python_message_to_proto(
+                            resp_obj, response_type, pb2_module
+                        )
                 except ValidationError as e:
                     return context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(e))
                 except Exception as e:
@@ -298,11 +333,20 @@ def connect_obj_with_stub(
             ) -> Any:
                 _ = self
                 try:
-                    arg = converter(request)
-                    resp_obj = original(arg, context)
-                    return convert_python_message_to_proto(
-                        resp_obj, response_type, pb2_module
-                    )
+                    if is_none_type(arg_type):
+                        resp_obj = original(
+                            None, context
+                        )  # Fixed: pass None instead of Empty
+                    else:
+                        arg = converter(request)
+                        resp_obj = original(arg, context)
+
+                    if is_none_type(response_type):
+                        return empty_pb2.Empty()  # type: ignore
+                    else:
+                        return convert_python_message_to_proto(
+                            resp_obj, response_type, pb2_module
+                        )
                 except ValidationError as e:
                     return context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(e))
                 except Exception as e:
@@ -360,7 +404,12 @@ def connect_obj_with_stub_async(
                 proto_iter: AsyncIterator[Any],
             ) -> AsyncIterator[Message]:
                 async for proto in proto_iter:
-                    yield item_converter(proto)
+                    result = item_converter(proto)
+                    if result is None:
+                        raise TypeError(
+                            f"Unexpected None result from converter for type {input_item_type}"
+                        )
+                    yield result
 
             if is_output_stream:
                 # stream-stream
@@ -519,11 +568,18 @@ def connect_obj_with_stub_async(
                     ) -> Any:
                         _ = self
                         try:
-                            arg = converter(request)
-                            resp_obj = await method(arg)
-                            return convert_python_message_to_proto(
-                                resp_obj, response_type, pb2_module
-                            )
+                            if is_none_type(input_type):
+                                resp_obj = await method(None)
+                            else:
+                                arg = converter(request)
+                                resp_obj = await method(arg)
+
+                            if is_none_type(response_type):
+                                return empty_pb2.Empty()  # type: ignore
+                            else:
+                                return convert_python_message_to_proto(
+                                    resp_obj, response_type, pb2_module
+                                )
                         except ValidationError as e:
                             await context.abort(
                                 grpc.StatusCode.INVALID_ARGUMENT, str(e)
@@ -540,11 +596,18 @@ def connect_obj_with_stub_async(
                     ) -> Any:
                         _ = self
                         try:
-                            arg = converter(request)
-                            resp_obj = await method(arg, context)
-                            return convert_python_message_to_proto(
-                                resp_obj, response_type, pb2_module
-                            )
+                            if is_none_type(input_type):
+                                resp_obj = await method(None, context)
+                            else:
+                                arg = converter(request)
+                                resp_obj = await method(arg, context)
+
+                            if is_none_type(response_type):
+                                return empty_pb2.Empty()  # type: ignore
+                            else:
+                                return convert_python_message_to_proto(
+                                    resp_obj, response_type, pb2_module
+                                )
                         except ValidationError as e:
                             await context.abort(
                                 grpc.StatusCode.INVALID_ARGUMENT, str(e)
@@ -597,11 +660,18 @@ def connect_obj_with_stub_connecpy(
                 ) -> Any:
                     _ = self
                     try:
-                        arg = converter(request)
-                        resp_obj = method(arg)
-                        return convert_python_message_to_proto(
-                            resp_obj, response_type, pb2_module
-                        )
+                        if is_none_type(arg_type):
+                            resp_obj = method(None)
+                        else:
+                            arg = converter(request)
+                            resp_obj = method(arg)
+
+                        if is_none_type(response_type):
+                            return empty_pb2.Empty()  # type: ignore
+                        else:
+                            return convert_python_message_to_proto(
+                                resp_obj, response_type, pb2_module
+                            )
                     except ValidationError as e:
                         return context.abort(Errors.InvalidArgument, str(e))
                     except Exception as e:
@@ -619,11 +689,18 @@ def connect_obj_with_stub_connecpy(
                 ) -> Any:
                     _ = self
                     try:
-                        arg = converter(request)
-                        resp_obj = method(arg, context)
-                        return convert_python_message_to_proto(
-                            resp_obj, response_type, pb2_module
-                        )
+                        if is_none_type(arg_type):
+                            resp_obj = method(None, context)
+                        else:
+                            arg = converter(request)
+                            resp_obj = method(arg, context)
+
+                        if is_none_type(response_type):
+                            return empty_pb2.Empty()  # type: ignore
+                        else:
+                            return convert_python_message_to_proto(
+                                resp_obj, response_type, pb2_module
+                            )
                     except ValidationError as e:
                         return context.abort(Errors.InvalidArgument, str(e))
                     except Exception as e:
@@ -676,11 +753,18 @@ def connect_obj_with_stub_async_connecpy(
                 ) -> Any:
                     _ = self
                     try:
-                        arg = converter(request)
-                        resp_obj = await method(arg)
-                        return convert_python_message_to_proto(
-                            resp_obj, response_type, pb2_module
-                        )
+                        if is_none_type(arg_type):
+                            resp_obj = await method(None)
+                        else:
+                            arg = converter(request)
+                            resp_obj = await method(arg)
+
+                        if is_none_type(response_type):
+                            return empty_pb2.Empty()  # type: ignore
+                        else:
+                            return convert_python_message_to_proto(
+                                resp_obj, response_type, pb2_module
+                            )
                     except ValidationError as e:
                         await context.abort(Errors.InvalidArgument, str(e))
                     except Exception as e:
@@ -698,11 +782,18 @@ def connect_obj_with_stub_async_connecpy(
                 ) -> Any:
                     _ = self
                     try:
-                        arg = converter(request)
-                        resp_obj = await method(arg, context)
-                        return convert_python_message_to_proto(
-                            resp_obj, response_type, pb2_module
-                        )
+                        if is_none_type(arg_type):
+                            resp_obj = await method(None, context)
+                        else:
+                            arg = converter(request)
+                            resp_obj = await method(arg, context)
+
+                        if is_none_type(response_type):
+                            return empty_pb2.Empty()  # type: ignore
+                        else:
+                            return convert_python_message_to_proto(
+                                resp_obj, response_type, pb2_module
+                            )
                     except ValidationError as e:
                         await context.abort(Errors.InvalidArgument, str(e))
                     except Exception as e:
@@ -725,7 +816,7 @@ def connect_obj_with_stub_async_connecpy(
 
 
 def python_value_to_proto_oneof(
-    field_name: str, field_type: Type[Any], value: Any, pb2_module: Any
+    field_name: str, field_type: type[Any], value: Any, pb2_module: Any
 ) -> tuple[str, Any]:
     """
     Converts a Python value from a Union type to a protobuf oneof field.
@@ -761,12 +852,9 @@ def python_value_to_proto_oneof(
 
 
 def convert_python_message_to_proto(
-    py_msg: Message, msg_type: Type[Message], pb2_module: Any
+    py_msg: Message, msg_type: type[Message], pb2_module: Any
 ) -> object:
-    """
-    Convert a Python Pydantic Message instance to a protobuf message instance.
-    Used for constructing a response.
-    """
+    """Convert a Python Pydantic Message instance to a protobuf message instance. Used for constructing a response."""
     field_dict = {}
     for name, field_info in msg_type.model_fields.items():
         value = getattr(py_msg, name)
@@ -799,7 +887,7 @@ def convert_python_message_to_proto(
     return proto_class(**field_dict)
 
 
-def python_value_to_proto(field_type: Type[Any], value: Any, pb2_module: Any) -> Any:
+def python_value_to_proto(field_type: type[Any], value: Any, pb2_module: Any) -> Any:
     """
     Perform Python->protobuf type conversion for each field value.
     """
@@ -821,12 +909,12 @@ def python_value_to_proto(field_type: Type[Any], value: Any, pb2_module: Any) ->
     origin = get_origin(field_type)
     # If seq
     if origin in (list, tuple):
-        inner_type = get_args(field_type)[0]  # type: ignore
+        inner_type = get_args(field_type)[0]
         return [python_value_to_proto(inner_type, v, pb2_module) for v in value]
 
     # If dict
     if origin is dict:
-        key_type, val_type = get_args(field_type)  # type: ignore
+        key_type, val_type = get_args(field_type)
         return {
             python_value_to_proto(key_type, k, pb2_module): python_value_to_proto(
                 val_type, v, pb2_module
@@ -884,7 +972,7 @@ def flatten_union(field_type: Any) -> list[Any]:
         for arg in get_args(field_type):
             results.extend(flatten_union(arg))
         return results
-    elif field_type is type(None):
+    elif is_none_type(field_type):
         return [field_type]
     else:
         return [field_type]
@@ -893,7 +981,7 @@ def flatten_union(field_type: Any) -> list[Any]:
 def protobuf_type_mapping(python_type: Any) -> str | None:
     """
     Map a Python type to a protobuf type name/class.
-    Includes support for Timestamp and Duration.
+    Includes support for Timestamp, Duration, and Empty.
     """
     import datetime
 
@@ -910,6 +998,9 @@ def protobuf_type_mapping(python_type: Any) -> str | None:
 
     if python_type == datetime.timedelta:
         return "google.protobuf.Duration"
+
+    if is_none_type(python_type):
+        return "google.protobuf.Empty"
 
     if is_enum_type(python_type):
         return python_type.__name__
@@ -987,6 +1078,39 @@ def generate_oneof_definition(
     return lines, current
 
 
+def extract_nested_types(field_type: Any) -> list[Any]:
+    """
+    Recursively extract all Message and enum types from a field type,
+    including those nested within list, dict, and union types.
+    """
+    extracted_types = []
+
+    if field_type is None or is_none_type(field_type):
+        return extracted_types
+
+    # Check if the type itself is an enum or Message
+    if is_enum_type(field_type):
+        extracted_types.append(field_type)
+    elif inspect.isclass(field_type) and issubclass(field_type, Message):
+        extracted_types.append(field_type)
+
+    # Handle Union types
+    if is_union_type(field_type):
+        union_args = flatten_union(field_type)
+        for arg in union_args:
+            if arg is not type(None):
+                extracted_types.extend(extract_nested_types(arg))
+
+    # Handle generic types (list, dict, etc.)
+    origin = get_origin(field_type)
+    if origin is not None:
+        args = get_args(field_type)
+        for arg in args:
+            extracted_types.extend(extract_nested_types(arg))
+
+    return extracted_types
+
+
 def generate_message_definition(
     message_type: Any,
     done_enums: set[Any],
@@ -1010,11 +1134,13 @@ def generate_message_definition(
         # Handle Union types, which may be Optional or a oneof.
         if is_union_type(field_type):
             union_args = flatten_union(field_type)
-            none_type = type(None)
+            none_type = type(
+                None
+            )  # Keep this as type(None) since we're working with union args
 
-            if none_type in union_args:
+            if none_type in union_args or None in union_args:
                 is_optional = True
-                union_args = [arg for arg in union_args if arg is not none_type]
+                union_args = [arg for arg in union_args if not is_none_type(arg)]
 
             if len(union_args) == 1:
                 # This is an Optional[T]. Treat it as a simple optional field.
@@ -1046,12 +1172,17 @@ def generate_message_definition(
         if proto_typename is None:
             raise Exception(f"Type {field_type} is not supported.")
 
-        if is_enum_type(field_type):
-            if field_type not in done_enums:
-                refs.append(field_type)
-        elif inspect.isclass(field_type) and issubclass(field_type, Message):
-            if field_type not in done_messages:
-                refs.append(field_type)
+        # Extract all nested Message and enum types recursively
+        nested_types = extract_nested_types(field_type)
+        for nested_type in nested_types:
+            if is_enum_type(nested_type) and nested_type not in done_enums:
+                refs.append(nested_type)
+            elif (
+                inspect.isclass(nested_type)
+                and issubclass(nested_type, Message)
+                and nested_type not in done_messages
+            ):
+                refs.append(nested_type)
 
         if field_info.description:
             fields.append("// " + field_info.description)
@@ -1122,7 +1253,7 @@ def is_generic_alias(annotation: Any) -> bool:
 def generate_proto(obj: object, package_name: str = "") -> str:
     """
     Generate a .proto definition from a service class.
-    Automatically handles Timestamp and Duration usage.
+    Automatically handles Timestamp, Duration, and Empty usage.
     """
     import datetime
 
@@ -1138,13 +1269,16 @@ def generate_proto(obj: object, package_name: str = "") -> str:
 
     uses_timestamp = False
     uses_duration = False
+    uses_empty = False
 
-    def check_and_set_well_known_types(py_type: Any):
+    def check_and_set_well_known_types_for_fields(py_type: Any):
+        """Check well-known types for field annotations (excludes None/Empty)."""
         nonlocal uses_timestamp, uses_duration
         if py_type == datetime.datetime:
             uses_timestamp = True
         if py_type == datetime.timedelta:
             uses_duration = True
+        # Don't check for None here - Optional fields don't use Empty
 
     for method_name, method in get_rpc_methods(obj):
         if method.__name__.startswith("_"):
@@ -1154,26 +1288,59 @@ def generate_proto(obj: object, package_name: str = "") -> str:
         request_type = get_request_arg_type(method_sig)
         response_type = method_sig.return_annotation
 
+        # Validate that we don't have AsyncIterator[None] which doesn't make any practical sense
+        if is_stream_type(request_type):
+            stream_item_type = get_args(request_type)[0]
+            if is_none_type(stream_item_type):
+                raise TypeError(
+                    f"Method '{method_name}' has AsyncIterator[None] as input type, which is not allowed. Streaming Empty messages is meaningless."
+                )
+
+        if is_stream_type(response_type):
+            stream_item_type = get_args(response_type)[0]
+            if is_none_type(stream_item_type):
+                raise TypeError(
+                    f"Method '{method_name}' has AsyncIterator[None] as return type, which is not allowed. Streaming Empty messages is meaningless."
+                )
+
+        # Handle NoneType for request and response
+        if is_none_type(request_type):
+            uses_empty = True
+        if is_none_type(response_type):
+            uses_empty = True
+
         # Recursively generate message definitions
-        message_types = [request_type, response_type]
+        message_types = []
+        if not is_none_type(request_type):
+            message_types.append(request_type)
+        if not is_none_type(response_type):
+            message_types.append(response_type)
+
         while message_types:
-            mt = message_types.pop()
-            if mt in done_messages:
+            mt: type[Message] | type[ServicerContext] | None = message_types.pop()
+            if mt in done_messages or mt is ServicerContext or mt is None:
                 continue
             done_messages.add(mt)
 
             if is_stream_type(mt):
                 item_type = get_args(mt)[0]
-                message_types.append(item_type)
+                if not is_none_type(item_type):
+                    message_types.append(item_type)
                 continue
+
+            mt = cast(type[Message], mt)
 
             for _, field_info in mt.model_fields.items():
                 t = field_info.annotation
                 if is_union_type(t):
                     for sub_t in flatten_union(t):
-                        check_and_set_well_known_types(sub_t)
+                        check_and_set_well_known_types_for_fields(
+                            sub_t
+                        )  # Use the field-specific version
                 else:
-                    check_and_set_well_known_types(t)
+                    check_and_set_well_known_types_for_fields(
+                        t
+                    )  # Use the field-specific version
 
             msg_def, refs = generate_message_definition(mt, done_enums, done_messages)
             mt_doc = inspect.getdoc(mt)
@@ -1201,20 +1368,40 @@ def generate_proto(obj: object, package_name: str = "") -> str:
         input_type = request_type
         input_is_stream = is_stream_type(input_type)
         output_is_stream = is_stream_type(response_type)
-        input_msg_type = get_args(input_type)[0] if input_is_stream else input_type
-        output_msg_type = (
-            get_args(response_type)[0] if output_is_stream else response_type
-        )
-        input_str = (
-            f"stream {input_msg_type.__name__}"
-            if input_is_stream
-            else input_msg_type.__name__
-        )
-        output_str = (
-            f"stream {output_msg_type.__name__}"
-            if output_is_stream
-            else output_msg_type.__name__
-        )
+
+        if input_is_stream:
+            input_msg_type = get_args(input_type)[0]
+        else:
+            input_msg_type = input_type
+
+        if output_is_stream:
+            output_msg_type = get_args(response_type)[0]
+        else:
+            output_msg_type = response_type
+
+        # Handle NoneType by using Empty (but we've already validated no streaming of Empty above)
+        if input_msg_type is None or input_msg_type is ServicerContext:
+            input_str = "google.protobuf.Empty"  # No need to check for stream since we validated above
+            if input_msg_type is ServicerContext:
+                uses_empty = True
+        else:
+            input_str = (
+                f"stream {input_msg_type.__name__}"
+                if input_is_stream
+                else input_msg_type.__name__
+            )
+
+        if output_msg_type is None or output_msg_type is ServicerContext:
+            output_str = "google.protobuf.Empty"  # No need to check for stream since we validated above
+            if output_msg_type is ServicerContext:
+                uses_empty = True
+        else:
+            output_str = (
+                f"stream {output_msg_type.__name__}"
+                if output_is_stream
+                else output_msg_type.__name__
+            )
+
         rpc_definitions.append(
             f"rpc {method_name} ({input_str}) returns ({output_str});"
         )
@@ -1231,6 +1418,8 @@ def generate_proto(obj: object, package_name: str = "") -> str:
         imports.append('import "google/protobuf/timestamp.proto";')
     if uses_duration:
         imports.append('import "google/protobuf/duration.proto";')
+    if uses_empty:
+        imports.append('import "google/protobuf/empty.proto";')
 
     import_block = "\n".join(imports)
     if import_block:
@@ -1577,6 +1766,254 @@ def generate_and_compile_proto_using_connecpy(
     if gen_connecpy is None:
         raise Exception("Generating Connecpy code")
     return gen_connecpy, gen_pb
+
+
+def is_combined_proto_enabled() -> bool:
+    """Check if combined proto file generation is enabled."""
+    return os.getenv("PYDANTIC_RPC_COMBINED_PROTO", "false").lower() == "true"
+
+
+def generate_combined_proto(
+    *services: object, package_name: str = "combined.v1"
+) -> str:
+    """Generate a combined .proto definition from multiple service classes."""
+    import datetime
+
+    all_type_definitions: list[str] = []
+    all_service_definitions: list[str] = []
+    done_messages: set[Any] = set()
+    done_enums: set[Any] = set()
+
+    uses_timestamp = False
+    uses_duration = False
+    uses_empty = False
+
+    def check_and_set_well_known_types_for_fields(py_type: Any):
+        """Check well-known types for field annotations (excludes None/Empty)."""
+        nonlocal uses_timestamp, uses_duration
+        if py_type == datetime.datetime:
+            uses_timestamp = True
+        if py_type == datetime.timedelta:
+            uses_duration = True
+
+    # Process each service
+    for service_obj in services:
+        service_class = service_obj.__class__
+        service_name = service_class.__name__
+        service_docstr = inspect.getdoc(service_class)
+        service_comment = (
+            "\n".join(comment_out(service_docstr)) if service_docstr else ""
+        )
+
+        service_rpc_definitions: list[str] = []
+
+        for method_name, method in get_rpc_methods(service_obj):
+            if method.__name__.startswith("_"):
+                continue
+
+            method_sig = inspect.signature(method)
+            request_type = get_request_arg_type(method_sig)
+            response_type = method_sig.return_annotation
+
+            # Validate stream types
+            if is_stream_type(request_type):
+                stream_item_type = get_args(request_type)[0]
+                if is_none_type(stream_item_type):
+                    raise TypeError(
+                        f"Method '{method_name}' has AsyncIterator[None] as input type, which is not allowed."
+                    )
+
+            if is_stream_type(response_type):
+                stream_item_type = get_args(response_type)[0]
+                if is_none_type(stream_item_type):
+                    raise TypeError(
+                        f"Method '{method_name}' has AsyncIterator[None] as return type, which is not allowed."
+                    )
+
+            # Handle NoneType for request and response
+            if is_none_type(request_type):
+                uses_empty = True
+            if is_none_type(response_type):
+                uses_empty = True
+
+            # Collect message types for processing
+            message_types = []
+            if not is_none_type(request_type):
+                message_types.append(request_type)
+            if not is_none_type(response_type):
+                message_types.append(response_type)
+
+            # Process message types
+            while message_types:
+                mt: type[Message] | type[ServicerContext] | None = message_types.pop()
+                if mt in done_messages or mt is ServicerContext or mt is None:
+                    continue
+                done_messages.add(mt)
+
+                if is_stream_type(mt):
+                    item_type = get_args(mt)[0]
+                    if not is_none_type(item_type):
+                        message_types.append(item_type)
+                    continue
+
+                mt = cast(type[Message], mt)
+
+                for _, field_info in mt.model_fields.items():
+                    t = field_info.annotation
+                    if is_union_type(t):
+                        for sub_t in flatten_union(t):
+                            check_and_set_well_known_types_for_fields(sub_t)
+                    else:
+                        check_and_set_well_known_types_for_fields(t)
+
+                msg_def, refs = generate_message_definition(
+                    mt, done_enums, done_messages
+                )
+                mt_doc = inspect.getdoc(mt)
+                if mt_doc:
+                    for comment_line in comment_out(mt_doc):
+                        all_type_definitions.append(comment_line)
+
+                all_type_definitions.append(msg_def)
+                all_type_definitions.append("")
+
+                for r in refs:
+                    if is_enum_type(r) and r not in done_enums:
+                        done_enums.add(r)
+                        enum_def = generate_enum_definition(r)
+                        all_type_definitions.append(enum_def)
+                        all_type_definitions.append("")
+                    elif issubclass(r, Message) and r not in done_messages:
+                        message_types.append(r)
+
+            # Generate RPC definition
+            method_docstr = inspect.getdoc(method)
+            if method_docstr:
+                for comment_line in comment_out(method_docstr):
+                    service_rpc_definitions.append(comment_line)
+
+            input_type = request_type
+            input_is_stream = is_stream_type(input_type)
+            output_is_stream = is_stream_type(response_type)
+
+            if input_is_stream:
+                input_msg_type = get_args(input_type)[0]
+            else:
+                input_msg_type = input_type
+
+            if output_is_stream:
+                output_msg_type = get_args(response_type)[0]
+            else:
+                output_msg_type = response_type
+
+            # Handle NoneType by using Empty
+            if input_msg_type is None or input_msg_type is ServicerContext:
+                input_str = "google.protobuf.Empty"  # No need to check for stream since we validated above
+                if input_msg_type is ServicerContext:
+                    uses_empty = True
+            else:
+                input_str = (
+                    f"stream {input_msg_type.__name__}"
+                    if input_is_stream
+                    else input_msg_type.__name__
+                )
+
+            if output_msg_type is None or output_msg_type is ServicerContext:
+                output_str = "google.protobuf.Empty"  # No need to check for stream since we validated above
+                if output_msg_type is ServicerContext:
+                    uses_empty = True
+            else:
+                output_str = (
+                    f"stream {output_msg_type.__name__}"
+                    if output_is_stream
+                    else output_msg_type.__name__
+                )
+
+            service_rpc_definitions.append(
+                f"rpc {method_name} ({input_str}) returns ({output_str});"
+            )
+
+        # Create service definition
+        service_def_lines: list[str] = []
+        if service_comment:
+            service_def_lines.append(service_comment)
+        service_def_lines.append(f"service {service_name} {{")
+        service_def_lines.extend([f"    {line}" for line in service_rpc_definitions])
+        service_def_lines.append("}")
+        service_def_lines.append("")
+
+        all_service_definitions.extend(service_def_lines)
+
+    # Build imports
+    imports: list[str] = []
+    if uses_timestamp:
+        imports.append('import "google/protobuf/timestamp.proto";')
+    if uses_duration:
+        imports.append('import "google/protobuf/duration.proto";')
+    if uses_empty:
+        imports.append('import "google/protobuf/empty.proto";')
+
+    import_block = "\n".join(imports)
+    if import_block:
+        import_block += "\n"
+
+    # Combine everything
+    proto_definition = f"""syntax = "proto3";
+
+package {package_name};
+
+{import_block}{"".join(all_service_definitions)}
+{indent_lines(all_type_definitions, "")}
+"""
+    return proto_definition
+
+
+def get_combined_proto_filename() -> str:
+    """Get the combined proto filename."""
+    return os.getenv("PYDANTIC_RPC_COMBINED_PROTO_FILENAME", "combined_services.proto")
+
+
+def generate_combined_descriptor_set(
+    *services: object, output_path: Path | None = None
+) -> bytes:
+    """Generate a combined protobuf descriptor set from multiple services."""
+    filename = get_combined_proto_filename()
+
+    if output_path is None:
+        output_path = get_proto_path(filename)
+
+    # Generate combined proto file
+    combined_proto = generate_combined_proto(*services)
+    proto_file_path = get_proto_path(filename)
+
+    with proto_file_path.open(mode="w", encoding="utf-8") as f:
+        _ = f.write(combined_proto)
+
+    # Generate descriptor set using protoc
+    out_str = str(proto_file_path.parent)
+    well_known_path = os.path.join(os.path.dirname(grpc_tools.__file__), "_proto")
+    args = [
+        "protoc",
+        f"-I{out_str}",
+        f"-I{well_known_path}",
+        f"--descriptor_set_out={output_path}",
+        "--include_imports",
+        proto_file_path.name,
+    ]
+
+    current_dir = os.getcwd()
+    os.chdir(out_str)
+    try:
+        if protoc.main(args) != 0:
+            raise RuntimeError("Failed to generate combined descriptor set")
+    finally:
+        os.chdir(current_dir)
+
+    # Read and return the descriptor set
+    with open(output_path, "rb") as f:
+        descriptor_data = f.read()
+
+    return descriptor_data
 
 
 ###############################################################################
