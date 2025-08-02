@@ -255,7 +255,7 @@ This will launch a Connecpy-based ASGI application that uses the same Pydantic m
 >     - Please follow the instruction described in https://go.dev/doc/install.
 > 2. Install `protoc-gen-connecpy`:
 >     ```bash
->     go install github.com/connecpy/v2/protoc-gen-connecpy@latest
+>     go install github.com/i2y/connecpy/v2/protoc-gen-connecpy@latest
 >     ```
 
 ## ♻️ Skipping Protobuf Generation
