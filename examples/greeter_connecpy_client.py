@@ -13,29 +13,30 @@
 # if __name__ == "__main__":
 #     run()
 
-from connecpy.context import ClientContext
-from connecpy.exceptions import ConnecpyServerException
+from connecpy.exceptions import ConnecpyException
 
 import greeter_connecpy
 import greeter_pb2
 
 
 server_url = "http://localhost:3000"
-timeout_s = 5
+timeout_ms = 5000  # Changed to milliseconds
 
 
-def main():
-    client = greeter_connecpy.GreeterClient(server_url, timeout=timeout_s)
+async def main():
+    client = greeter_connecpy.GreeterClient(server_url)
 
     try:
-        response = client.SayHello(
-            ctx=ClientContext(),
+        response = await client.SayHello(
             request=greeter_pb2.HelloRequest(name="World"),
+            timeout_ms=timeout_ms,
         )
         print(response)
-    except ConnecpyServerException as e:
+    except ConnecpyException as e:
         print(e.code, e.message, e.to_dict())
 
 
 if __name__ == "__main__":
-    main()
+    import asyncio
+
+    asyncio.run(main())

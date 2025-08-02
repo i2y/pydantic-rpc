@@ -21,11 +21,11 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.24'
           cache: true
 
       - name: Install protoc-gen-connecpy plugin
-        run: go install github.com/i2y/connecpy/protoc-gen-connecpy@latest
+        run: go install github.com/i2y/connecpy/v2/protoc-gen-connecpy@latest
 
       - name: Setup uv with cache
         id: setup-uv

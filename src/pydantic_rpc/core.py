@@ -26,9 +26,9 @@ import annotated_types
 import grpc
 from grpc import ServicerContext
 import grpc_tools
-from connecpy.asgi import ConnecpyASGIApp as ConnecpyASGI
-from connecpy.errors import Errors
-from connecpy.wsgi import ConnecpyWSGIApp as ConnecpyWSGI
+from connecpy.server import ConnecpyASGIApplication as ConnecpyASGI
+from connecpy.server import ConnecpyWSGIApplication as ConnecpyWSGI
+from connecpy.code import Code as Errors
 
 # Protobuf Python modules for Timestamp, Duration (requires protobuf / grpcio)
 from google.protobuf import duration_pb2, timestamp_pb2, empty_pb2
@@ -673,9 +673,9 @@ def connect_obj_with_stub_connecpy(
                                 resp_obj, response_type, pb2_module
                             )
                     except ValidationError as e:
-                        return context.abort(Errors.InvalidArgument, str(e))
+                        return context.abort(Errors.INVALID_ARGUMENT, str(e))
                     except Exception as e:
-                        return context.abort(Errors.Internal, str(e))
+                        return context.abort(Errors.INTERNAL, str(e))
 
                 return stub_method1
 
@@ -702,9 +702,9 @@ def connect_obj_with_stub_connecpy(
                                 resp_obj, response_type, pb2_module
                             )
                     except ValidationError as e:
-                        return context.abort(Errors.InvalidArgument, str(e))
+                        return context.abort(Errors.INVALID_ARGUMENT, str(e))
                     except Exception as e:
-                        return context.abort(Errors.Internal, str(e))
+                        return context.abort(Errors.INTERNAL, str(e))
 
                 return stub_method2
 
@@ -766,9 +766,9 @@ def connect_obj_with_stub_async_connecpy(
                                 resp_obj, response_type, pb2_module
                             )
                     except ValidationError as e:
-                        await context.abort(Errors.InvalidArgument, str(e))
+                        await context.abort(Errors.INVALID_ARGUMENT, str(e))
                     except Exception as e:
-                        await context.abort(Errors.Internal, str(e))
+                        await context.abort(Errors.INTERNAL, str(e))
 
                 return stub_method1
 
@@ -795,9 +795,9 @@ def connect_obj_with_stub_async_connecpy(
                                 resp_obj, response_type, pb2_module
                             )
                     except ValidationError as e:
-                        await context.abort(Errors.InvalidArgument, str(e))
+                        await context.abort(Errors.INVALID_ARGUMENT, str(e))
                     except Exception as e:
-                        await context.abort(Errors.Internal, str(e))
+                        await context.abort(Errors.INTERNAL, str(e))
 
                 return stub_method2
 
@@ -2277,8 +2277,12 @@ class ASGIApp:
         _ = await self._app(scope, receive, send)
 
 
-def get_connecpy_server_class(connecpy_module: Any, service_name: str):
-    return getattr(connecpy_module, f"{service_name}Server")
+def get_connecpy_asgi_app_class(connecpy_module: Any, service_name: str):
+    return getattr(connecpy_module, f"{service_name}ASGIApplication")
+
+
+def get_connecpy_wsgi_app_class(connecpy_module: Any, service_name: str):
+    return getattr(connecpy_module, f"{service_name}WSGIApplication")
 
 
 class ConnecpyASGIApp:
@@ -2287,7 +2291,7 @@ class ConnecpyASGIApp:
     """
 
     def __init__(self):
-        self._app: ConnecpyASGI = ConnecpyASGI()
+        self._services: list[tuple[Any, str]] = []  # List of (app, path) tuples
         self._service_names: list[str] = []
         self._package_name: str = ""
 
@@ -2307,8 +2311,14 @@ class ConnecpyASGIApp:
         )
         service_name = obj.__class__.__name__
         service_impl = concreteServiceClass()
-        connecpy_server = get_connecpy_server_class(connecpy_module, service_name)
-        self._app.add_service(connecpy_server(service=service_impl))
+
+        # Get the service-specific ASGI application class
+        app_class = get_connecpy_asgi_app_class(connecpy_module, service_name)
+        app = app_class(service=service_impl)
+
+        # Store the app and its path for routing
+        self._services.append((app, app.path))
+
         full_service_name = pb2_module.DESCRIPTOR.services_by_name[
             service_name
         ].full_name
@@ -2325,8 +2335,26 @@ class ConnecpyASGIApp:
         receive: Callable[[], Any],
         send: Callable[[dict[str, Any]], Any],
     ):
-        """ASGI entry point."""
-        _ = await self._app(scope, receive, send)
+        """ASGI entry point with routing for multiple services."""
+        if scope["type"] != "http":
+            await send({"type": "http.response.start", "status": 404})
+            await send({"type": "http.response.body", "body": b"Not Found"})
+            return
+
+        path = scope.get("path", "")
+
+        # Route to the appropriate service based on path
+        for app, service_path in self._services:
+            if path.startswith(service_path):
+                return await app(scope, receive, send)
+
+        # If only one service is mounted, use it as default
+        if len(self._services) == 1:
+            return await self._services[0][0](scope, receive, send)
+
+        # No matching service found
+        await send({"type": "http.response.start", "status": 404})
+        await send({"type": "http.response.body", "body": b"Not Found"})
 
 
 class ConnecpyWSGIApp:
@@ -2335,12 +2363,12 @@ class ConnecpyWSGIApp:
     """
 
     def __init__(self):
-        self._app: ConnecpyWSGI = ConnecpyWSGI()
+        self._services: list[tuple[Any, str]] = []  # List of (app, path) tuples
         self._service_names: list[str] = []
         self._package_name: str = ""
 
     def mount(self, obj: object, package_name: str = ""):
-        """Generate and compile proto files, then mount the async service implementation."""
+        """Generate and compile proto files, then mount the sync service implementation."""
         connecpy_module, pb2_module = generate_and_compile_proto_using_connecpy(
             obj, package_name
         )
@@ -2349,14 +2377,20 @@ class ConnecpyWSGIApp:
     def mount_using_pb2_modules(
         self, connecpy_module: Any, pb2_module: Any, obj: object
     ):
-        """Connect the compiled connecpy and pb2 modules with the async service implementation."""
+        """Connect the compiled connecpy and pb2 modules with the sync service implementation."""
         concreteServiceClass = connect_obj_with_stub_connecpy(
             connecpy_module, pb2_module, obj
         )
         service_name = obj.__class__.__name__
         service_impl = concreteServiceClass()
-        connecpy_server = get_connecpy_server_class(connecpy_module, service_name)
-        self._app.add_service(connecpy_server(service=service_impl))
+
+        # Get the service-specific WSGI application class
+        app_class = get_connecpy_wsgi_app_class(connecpy_module, service_name)
+        app = app_class(service=service_impl)
+
+        # Store the app and its path for routing
+        self._services.append((app, app.path))
+
         full_service_name = pb2_module.DESCRIPTOR.services_by_name[
             service_name
         ].full_name
@@ -2372,8 +2406,21 @@ class ConnecpyWSGIApp:
         environ: dict[str, Any],
         start_response: Callable[[str, list[tuple[str, str]]], None],
     ) -> Any:
-        """WSGI entry point."""
-        return self._app(environ, start_response)
+        """WSGI entry point with routing for multiple services."""
+        path = environ.get("PATH_INFO", "")
+
+        # Route to the appropriate service based on path
+        for app, service_path in self._services:
+            if path.startswith(service_path):
+                return app(environ, start_response)
+
+        # If only one service is mounted, use it as default
+        if len(self._services) == 1:
+            return self._services[0][0](environ, start_response)
+
+        # No matching service found
+        start_response("404 Not Found", [("Content-Type", "text/plain")])
+        return [b"Not Found"]
 
 
 def main():
