@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/i2y-pydantic-rpc-badge.png)](https://mseep.ai/app/i2y-pydantic-rpc)
+
 # 🚀 PydanticRPC
 
 **PydanticRPC** is a Python library that enables you to rapidly expose [Pydantic](https://docs.pydantic.dev/) models via [gRPC](https://grpc.io/)/[Connect RPC](https://connectrpc.com/docs/protocol/) services without writing any protobuf files. Instead, it automatically generates protobuf files on the fly from the method signatures of your Python objects and the type signatures of your Pydantic models.
