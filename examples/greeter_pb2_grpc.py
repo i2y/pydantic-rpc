@@ -30,9 +30,7 @@ if _version_not_supported:
 
 
 class GreeterStub(object):
-    """Greeter service.
-    This is a simple example of a service that greets you.
-    """
+    """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
         """Constructor.
@@ -49,19 +47,10 @@ class GreeterStub(object):
 
 
 class GreeterServicer(object):
-    """Greeter service.
-    This is a simple example of a service that greets you.
-    """
+    """Missing associated documentation comment in .proto file."""
 
     def SayHello(self, request, context):
-        """Says hello to the user.
-
-        Args:
-        request (HelloRequest): The request message.
-
-        Returns:
-        HelloReply: The reply message.
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
@@ -84,9 +73,7 @@ def add_GreeterServicer_to_server(servicer, server):
 
 # This class is part of an EXPERIMENTAL API.
 class Greeter(object):
-    """Greeter service.
-    This is a simple example of a service that greets you.
-    """
+    """Missing associated documentation comment in .proto file."""
 
     @staticmethod
     def SayHello(
