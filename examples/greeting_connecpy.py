@@ -1,4 +1,5 @@
-from pydantic_rpc import ConnecpyASGIApp, Message
+from typing import AsyncIterator
+from pydantic_rpc import ASGIApp, Message
 
 
 class HelloRequest(Message):
@@ -39,6 +40,29 @@ class Greeter:
         """
         return HelloReply(message=f"Hello, {request.name}!")
 
+    async def say_hello_stream(
+        self, request: HelloRequest
+    ) -> AsyncIterator[HelloReply]:
+        """Says hello multiple times with streaming.
 
-app = ConnecpyASGIApp()
+        This demonstrates server-side streaming in Connect RPC.
+
+        Args:
+            request (HelloRequest): The request message.
+
+        Yields:
+            HelloReply: Multiple greeting messages.
+        """
+        greetings = [
+            f"Hello, {request.name}!",
+            f"Nice to meet you, {request.name}!",
+            f"How are you today, {request.name}?",
+            f"Have a great day, {request.name}!",
+        ]
+
+        for greeting in greetings:
+            yield HelloReply(message=greeting)
+
+
+app = ASGIApp()
 app.mount(Greeter())

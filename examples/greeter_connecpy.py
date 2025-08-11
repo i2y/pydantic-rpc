@@ -9,8 +9,8 @@ from connecpy.code import Code
 from connecpy.exceptions import ConnecpyException
 from connecpy.headers import Headers
 from connecpy.server import (
-    ConnecpyASGIApplication,
-    ConnecpyWSGIApplication,
+    ASGIApplication,
+    WSGIApplication,
     Endpoint,
     ServerInterceptor,
     ServiceContext,
@@ -25,7 +25,7 @@ class Greeter(Protocol):
         raise ConnecpyException(Code.UNIMPLEMENTED, "Not implemented")
 
 
-class GreeterASGIApplication(ConnecpyASGIApplication):
+class GreeterASGIApplication(ASGIApplication):
     def __init__(
         self,
         service: Greeter,
@@ -82,7 +82,7 @@ class GreeterSync(Protocol):
         raise ConnecpyException(Code.UNIMPLEMENTED, "Not implemented")
 
 
-class GreeterWSGIApplication(ConnecpyWSGIApplication):
+class GreeterWSGIApplication(WSGIApplication):
     def __init__(self, service: GreeterSync):
         super().__init__(
             endpoints={

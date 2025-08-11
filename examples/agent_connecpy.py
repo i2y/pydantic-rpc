@@ -8,7 +8,7 @@ from openai import AsyncOpenAI
 from pydantic import Field
 from pydantic_ai import Agent
 from pydantic_ai.models.openai import OpenAIModel
-from pydantic_rpc import ConnecpyASGIApp, Message
+from pydantic_rpc import ASGIApp, Message
 
 
 class CityLocation(Message):
@@ -45,7 +45,7 @@ class OlympicsLocationAgent:
 
 
 async def main():
-    app = ConnecpyASGIApp()
+    app = ASGIApp()
     app.mount(OlympicsLocationAgent())
     config = Config()
     config.bind = ["0.0.0.0:3000"]

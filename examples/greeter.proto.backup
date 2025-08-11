@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package greeter.v1;
+
+// Greeter service.
+// This is a simple example of a service that greets you.
+service Greeter {
+    // Says hello to the user.
+    //
+    // Args:
+    //     request (HelloRequest): The request message.
+    //
+    // Returns:
+    //     HelloReply: The reply message.
+    rpc SayHello (HelloRequest) returns (HelloReply);
+}
+
+// Reply message.
+// This is a simple example of a reply message.
+//
+// Attributes:
+//     message (str): The message to be sent.
+message HelloReply {
+    string message = 1;
+}
+
+// Request message.
+// This is a simple example of a request message.
+//
+// Attributes:
+//     name (str): The name of the person to greet.
+message HelloRequest {
+    string name = 1;
+}
+
