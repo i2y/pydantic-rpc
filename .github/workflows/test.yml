@@ -25,7 +25,7 @@ jobs:
           cache: true
 
       - name: Install protoc-gen-connecpy plugin
-        run: go install github.com/i2y/connecpy/v2/protoc-gen-connecpy@latest
+        run: go install github.com/i2y/connecpy/v2/protoc-gen-connecpy@v2.1.0
 
       - name: Setup uv with cache
         id: setup-uv
