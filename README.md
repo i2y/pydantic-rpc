@@ -655,6 +655,203 @@ buf: * (#2) Call complete
 %
 ```
 
+### 🪶 Empty Messages
+
+Empty request/response messages are automatically mapped to `google.protobuf.Empty`:
+
+```python
+from pydantic_rpc import AsyncIOServer, Message
+
+
+class EmptyRequest(Message):
+    pass  # Automatically uses google.protobuf.Empty
+
+
+class GreetingResponse(Message):
+    message: str
+
+
+class GreetingService:
+    async def say_hello(self, request: EmptyRequest) -> GreetingResponse:
+        return GreetingResponse(message="Hello!")
+    
+    async def get_default_greeting(self) -> GreetingResponse:
+        # Method with no request parameter (implicitly empty)
+        return GreetingResponse(message="Hello, World!")
+```
+
+### 🎨 Custom Serialization
+
+Pydantic's serialization decorators are fully supported:
+
+```python
+from typing import Any
+from pydantic import field_serializer, model_serializer
+from pydantic_rpc import Message
+
+
+class UserMessage(Message):
+    name: str
+    age: int
+    
+    @field_serializer('name')
+    def serialize_name(self, name: str) -> str:
+        """Always uppercase the name when serializing."""
+        return name.upper()
+
+
+class ComplexMessage(Message):
+    value: int
+    multiplier: int
+    
+    @model_serializer
+    def serialize_model(self) -> dict[str, Any]:
+        """Custom serialization with computed fields."""
+        return {
+            'value': self.value,
+            'multiplier': self.multiplier,
+            'result': self.value * self.multiplier  # Computed field
+        }
+```
+
+The serializers are automatically applied when converting between Pydantic models and protobuf messages.
+
+#### ⚠️ Limitations and Considerations
+
+**1. Nested Message serializers are now supported (v0.8.0+)**
+```python
+class Address(Message):
+    city: str
+    
+    @field_serializer("city")
+    def serialize_city(self, city: str) -> str:
+        return city.upper()
+
+class User(Message):
+    name: str
+    address: Address  # ← Address's serializers ARE applied with DEEP strategy
+    
+    @field_serializer("name")
+    def serialize_name(self, name: str) -> str:
+        return name.upper()  # ← This IS applied
+```
+
+**Serializer Strategy Control:**
+You can control how nested serializers are applied via environment variable:
+```bash
+# Apply serializers at all nesting levels (default)
+export PYDANTIC_RPC_SERIALIZER_STRATEGY=deep
+
+# Apply only top-level serializers
+export PYDANTIC_RPC_SERIALIZER_STRATEGY=shallow
+
+# Disable all serializers
+export PYDANTIC_RPC_SERIALIZER_STRATEGY=none
+```
+
+**Performance Impact:**
+- DEEP strategy: ~4% overhead for simple nested structures
+- SHALLOW strategy: ~2% overhead (only top-level)
+- NONE strategy: No overhead (serializers disabled)
+
+**2. New fields added by serializers are ignored**
+```python
+class ComplexMessage(Message):
+    value: int
+    multiplier: int
+    
+    @model_serializer
+    def serialize_model(self) -> dict[str, Any]:
+        return {
+            "value": self.value,
+            "multiplier": self.multiplier,
+            "result": self.value * self.multiplier  # ← Won't appear in protobuf
+        }
+```
+**Problem**: The `result` field doesn't exist in the Message definition, so it's not in the protobuf schema.
+
+**3. Type must remain consistent**
+```python
+class BadExample(Message):
+    number: int
+    
+    @field_serializer("number")
+    def serialize_number(self, number: int) -> str:  # ❌ int → str
+        return str(number)  # This will cause issues
+```
+
+**4. Union/Optional fields have limited support**
+```python
+class UnionExample(Message):
+    data: str | int | None  # Union type
+    
+    @field_serializer("data")
+    def serialize_data(self, data: str | int | None) -> str | int | None:
+        # Serializer may not be applied to Union types
+        return data
+```
+
+**5. Errors fail silently with fallback**
+```python
+class RiskyMessage(Message):
+    value: int
+    
+    @field_serializer("value")
+    def serialize_value(self, value: int) -> int:
+        if value == 0:
+            raise ValueError("Cannot serialize zero")
+        return value * 2
+
+# If error occurs, original value is used (silent fallback)
+```
+
+**6. Circular references are handled gracefully**
+```python
+class Node(Message):
+    value: str
+    child: "Node | None" = None
+    
+    @field_serializer("value")
+    def serialize_value(self, v: str) -> str:
+        return v.upper()
+
+# Circular references are detected and prevented
+node1 = Node(value="first")
+node2 = Node(value="second")
+node1.child = node2
+node2.child = node1  # Circular reference
+
+# When converting to protobuf:
+# - Circular references are detected
+# - Empty proto is returned for repeated objects
+# - No infinite recursion occurs
+# Note: Pydantic's model_dump() will fail on circular refs,
+#       so serializers won't be applied in this case
+```
+
+**✅ Recommended Usage:**
+```python
+class GoodMessage(Message):
+    # Use with primitive types
+    name: str
+    age: int
+    
+    @field_serializer("name")
+    def normalize_name(self, name: str) -> str:
+        return name.strip().title()  # Normalization
+    
+    @field_serializer("age")
+    def clamp_age(self, age: int) -> int:
+        return max(0, min(age, 150))  # Range limiting
+```
+
+**Best Practices:**
+- Use serializers primarily for primitive types (str, int, float, bool)
+- Keep type consistency (int → int, str → str)
+- Avoid complex transformations or side effects
+- Test error cases thoroughly
+- Be aware that errors fail silently
+
 ### 🔗 Multiple Services with Custom Interceptors
 
 PydanticRPC supports defining and running multiple services in a single server:
@@ -886,8 +1083,8 @@ This approach works because protobuf allows message types within `oneof` fields,
   - [x] unary-stream
   - [x] stream-unary
   - [x] stream-stream
-- [ ] Betterproto Support
-- [ ] Sonora-connect Support
+- [x] Empty Message Support (automatic google.protobuf.Empty)
+- [x] Pydantic Serializer Support (@model_serializer, @field_serializer)
 - [ ] Custom Health Check Support
 - [x] MCP (Model Context Protocol) Support via official MCP SDK
 - [ ] Add more examples
