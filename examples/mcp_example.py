@@ -3,7 +3,6 @@
 
 import sys
 from datetime import datetime
-from pydantic import BaseModel
 from pydantic_rpc import Message
 from pydantic_rpc.mcp import MCPExporter
 
@@ -115,10 +114,10 @@ def main():
             "For example, to use with Claude Desktop, add to claude_desktop_config.json:",
             file=sys.stderr,
         )
-        print(f'  "calculator": {{', file=sys.stderr)
-        print(f'    "command": "python",', file=sys.stderr)
+        print('  "calculator": {', file=sys.stderr)
+        print('    "command": "python",', file=sys.stderr)
         print(f'    "args": ["{__file__}"]', file=sys.stderr)
-        print(f"  }}", file=sys.stderr)
+        print("  }", file=sys.stderr)
         print("", file=sys.stderr)
 
     log("Starting stdio server...")

@@ -3,7 +3,6 @@
 
 import asyncio
 import uvicorn
-from pydantic import BaseModel
 from pydantic_rpc import Message, ConnecpyASGIApp
 from pydantic_rpc.mcp import MCPExporter
 

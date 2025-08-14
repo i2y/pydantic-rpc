@@ -4,7 +4,6 @@
 import sys
 import json
 from datetime import datetime
-from pydantic import BaseModel
 from pydantic_rpc import Message
 from pydantic_rpc.mcp import MCPExporter
 
