@@ -9,7 +9,7 @@ import sys
 import time
 import types
 from typing import Union
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from concurrent import futures
 from pathlib import Path
 from posixpath import basename
@@ -2833,8 +2833,10 @@ class WSGIApp:
     def __call__(
         self,
         environ: dict[str, Any],
-        start_response: Callable[[str, list[tuple[str, str]]], None],
-    ) -> Any:
+        start_response: Callable[
+            [str, list[tuple[str, str]]], Callable[[bytes], object]
+        ],
+    ) -> Iterable[bytes]:
         """WSGI entry point with routing for multiple services."""
         path = environ.get("PATH_INFO", "")
 
