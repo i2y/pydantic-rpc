@@ -106,7 +106,7 @@ app.mount(OlympicsLocationAgent())
   - 🔎 **Server Reflection:** Built-in support for gRPC server reflection.
   - ⚡ **Asynchronous Support:** Easily create asynchronous gRPC services with `AsyncIOServer`.
 - **For Connect-RPC:**
-  - 🌐 **Full Protocol Support:** Native Connect-RPC support via `Connecpy` v2.1.0+
+  - 🌐 **Full Protocol Support:** Native Connect-RPC support via `Connecpy` v2.2.0+
   - 🔄 **All Streaming Patterns:** Unary, server streaming, client streaming, and bidirectional streaming
   - 🌐 **WSGI/ASGI Applications:** Run as standard WSGI or ASGI applications for easy deployment
 - 🛠️ **Pre-generated Protobuf Files and Code:** Pre-generate proto files and corresponding code via the CLI. By setting the environment variable (PYDANTIC_RPC_SKIP_GENERATION), you can skip runtime generation.
@@ -226,17 +226,21 @@ app.mount(Greeter())
 
 ### 🏆 Connect-RPC with Streaming Example
 
-PydanticRPC provides native Connect-RPC support via Connecpy v2.1.0+, including full streaming capabilities. Check out "greeting_connecpy.py" for an example:
+PydanticRPC provides native Connect-RPC support via Connecpy v2.2.0+, including full streaming capabilities and PEP 8 naming conventions. Check out our ASGI examples:
 
 ```bash
-uv run greeting_connecpy.py
+# Run with uvicorn
+uv run uvicorn greeting_asgi:app --port 3000
+
+# Or run streaming example
+uv run python examples/streaming_connecpy.py
 ```
 
 This will launch a Connecpy-based ASGI application that uses the same Pydantic models to serve Connect-RPC requests.
 
 #### Streaming Support with Connecpy
 
-Connecpy v2.1.0 adds full support for streaming RPCs:
+Connecpy v2.2.0 provides full support for streaming RPCs with automatic PEP 8 naming (snake_case):
 
 ```python
 from typing import AsyncIterator
@@ -283,7 +287,7 @@ app.mount(StreamingService())
 >     - Please follow the instruction described in https://go.dev/doc/install.
 > 2. Install `protoc-gen-connecpy`:
 >     ```bash
->     go install github.com/i2y/connecpy/protoc-gen-connecpy@latest
+>     go install github.com/i2y/connecpy/v2/protoc-gen-connecpy@latest
 >     ```
 
 ## ♻️ Skipping Protobuf Generation
