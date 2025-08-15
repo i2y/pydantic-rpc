@@ -58,7 +58,7 @@ import asyncio
 from openai import AsyncOpenAI
 from pydantic_ai import Agent
 from pydantic_ai.models.openai import OpenAIModel
-from pydantic_rpc import ConnecpyASGIApp, Message
+from pydantic_rpc import ASGIApp, Message
 
 
 class CityLocation(Message):
@@ -89,7 +89,7 @@ class OlympicsLocationAgent:
         result = await self._agent.run(req.prompt())
         return result.data
 
-app = ConnecpyASGIApp()
+app = ASGIApp()
 app.mount(OlympicsLocationAgent())
 
 ```
@@ -105,10 +105,10 @@ app.mount(OlympicsLocationAgent())
   - 💚 **Health Checking:** Built-in support for gRPC health checks using `grpc_health.v1`.
   - 🔎 **Server Reflection:** Built-in support for gRPC server reflection.
   - ⚡ **Asynchronous Support:** Easily create asynchronous gRPC services with `AsyncIOServer`.
-- **For gRPC-Web:**
-  - 🌐 **WSGI/ASGI Support:** Create gRPC-Web services that can run as WSGI or ASGI applications powered by `Sonora`.
 - **For Connect-RPC:**
-  - 🌐 **Connecpy Support:** Partially supports Connect-RPC via `Connecpy`.
+  - 🌐 **Full Protocol Support:** Native Connect-RPC support via `Connecpy` v2.2.0+
+  - 🔄 **All Streaming Patterns:** Unary, server streaming, client streaming, and bidirectional streaming
+  - 🌐 **WSGI/ASGI Applications:** Run as standard WSGI or ASGI applications for easy deployment
 - 🛠️ **Pre-generated Protobuf Files and Code:** Pre-generate proto files and corresponding code via the CLI. By setting the environment variable (PYDANTIC_RPC_SKIP_GENERATION), you can skip runtime generation.
 - 🤖 **MCP (Model Context Protocol) Support:** Expose your services as tools for AI assistants using the official MCP SDK, supporting both stdio and HTTP/SSE transports.
 
@@ -122,7 +122,11 @@ pip install pydantic-rpc
 
 ## 🚀 Getting Started
 
-### 🔧 Synchronous Service Example
+PydanticRPC supports two main protocols:
+- **gRPC**: Traditional gRPC services with `Server` and `AsyncIOServer`
+- **Connect-RPC**: Modern HTTP-based RPC with `ASGIApp` and `WSGIApp`
+
+### 🔧 Synchronous gRPC Service Example
 
 ```python
 from pydantic_rpc import Server, Message
@@ -143,7 +147,7 @@ if __name__ == "__main__":
     server.run(Greeter())
 ```
 
-### ⚙️ Asynchronous Service Example
+### ⚙️ Asynchronous gRPC Service Example
 
 ```python
 import asyncio
@@ -176,7 +180,7 @@ if __name__ == "__main__":
 
 The AsyncIOServer automatically handles graceful shutdown on SIGTERM and SIGINT signals.
 
-### 🌐 ASGI Application Example
+### 🌐 Connect-RPC ASGI Application Example
 
 ```python
 from pydantic_rpc import ASGIApp, Message
@@ -188,27 +192,17 @@ class HelloReply(Message):
     message: str
 
 class Greeter:
-    def say_hello(self, request: HelloRequest) -> HelloReply:
+    async def say_hello(self, request: HelloRequest) -> HelloReply:
         return HelloReply(message=f"Hello, {request.name}!")
 
-
-async def app(scope, receive, send):
-    """ASGI application.
-
-    Args:
-        scope (dict): The ASGI scope.
-        receive (callable): The receive function.
-        send (callable): The send function.
-    """
-    pass
-
-# Please note that `app` is any ASGI application, such as FastAPI or Starlette.
-
-app = ASGIApp(app)
+app = ASGIApp()
 app.mount(Greeter())
+
+# Run with uvicorn:
+# uvicorn script:app --host 0.0.0.0 --port 8000
 ```
 
-### 🌐 WSGI Application Example
+### 🌐 Connect-RPC WSGI Application Example
 
 ```python
 from pydantic_rpc import WSGIApp, Message
@@ -223,30 +217,68 @@ class Greeter:
     def say_hello(self, request: HelloRequest) -> HelloReply:
         return HelloReply(message=f"Hello, {request.name}!")
 
-def app(environ, start_response):
-    """WSGI application.
-
-    Args:
-        environ (dict): The WSGI environment.
-        start_response (callable): The start_response function.
-    """
-    pass
-
-# Please note that `app` is any WSGI application, such as Flask or Django.
-
-app = WSGIApp(app)
+app = WSGIApp()
 app.mount(Greeter())
+
+# Run with gunicorn:
+# gunicorn script:app
 ```
 
-### 🏆 Connecpy (Connect-RPC) Example
+### 🏆 Connect-RPC with Streaming Example
 
-PydanticRPC also partially supports Connect-RPC via connecpy. Check out “greeting_connecpy.py” for an example:
+PydanticRPC provides native Connect-RPC support via Connecpy v2.2.0+, including full streaming capabilities and PEP 8 naming conventions. Check out our ASGI examples:
 
 ```bash
-uv run greeting_connecpy.py
+# Run with uvicorn
+uv run uvicorn greeting_asgi:app --port 3000
+
+# Or run streaming example
+uv run python examples/streaming_connecpy.py
 ```
 
 This will launch a Connecpy-based ASGI application that uses the same Pydantic models to serve Connect-RPC requests.
+
+#### Streaming Support with Connecpy
+
+Connecpy v2.2.0 provides full support for streaming RPCs with automatic PEP 8 naming (snake_case):
+
+```python
+from typing import AsyncIterator
+from pydantic_rpc import ASGIApp, Message
+
+class StreamRequest(Message):
+    text: str
+    count: int
+
+class StreamResponse(Message):
+    text: str
+    index: int
+
+class StreamingService:
+    # Server streaming
+    async def server_stream(self, request: StreamRequest) -> AsyncIterator[StreamResponse]:
+        for i in range(request.count):
+            yield StreamResponse(text=f"{request.text}_{i}", index=i)
+    
+    # Client streaming
+    async def client_stream(self, requests: AsyncIterator[StreamRequest]) -> StreamResponse:
+        texts = []
+        async for req in requests:
+            texts.append(req.text)
+        return StreamResponse(text=" ".join(texts), index=len(texts))
+    
+    # Bidirectional streaming
+    async def bidi_stream(
+        self, requests: AsyncIterator[StreamRequest]
+    ) -> AsyncIterator[StreamResponse]:
+        idx = 0
+        async for req in requests:
+            yield StreamResponse(text=f"Echo: {req.text}", index=idx)
+            idx += 1
+
+app = ASGIApp()
+app.mount(StreamingService())
+```
 
 > [!NOTE]
 > Please install `protoc-gen-connecpy` to run the Connecpy example.
@@ -284,9 +316,9 @@ export PYDANTIC_RPC_RESERVED_FIELDS=1
 
 ## 💎 Advanced Features
 
-### 🌊 Response Streaming
-PydanticRPC supports streaming responses only for asynchronous gRPC and gRPC-Web services.
-If a service class method’s return type is `typing.AsyncIterator[T]`, the method is considered a streaming method.
+### 🌊 Response Streaming (gRPC)
+PydanticRPC supports streaming responses for both gRPC and Connect-RPC services.
+If a service class method's return type is `typing.AsyncIterator[T]`, the method is considered a streaming method.
 
 
 Please see the sample code below:
@@ -853,8 +885,9 @@ class GoodMessage(Message):
 - Be aware that errors fail silently
 
 ### 🔗 Multiple Services with Custom Interceptors
+>>>>>>> origin/main
 
-PydanticRPC supports defining and running multiple services in a single server:
+PydanticRPC supports defining and running multiple gRPC services in a single server:
 
 ```python
 from datetime import datetime
@@ -985,11 +1018,11 @@ Any MCP-compatible client can connect to your service. For example, to configure
 MCP can also be mounted to existing ASGI applications:
 
 ```python
-from pydantic_rpc import ConnecpyASGIApp
+from pydantic_rpc import ASGIApp
 from pydantic_rpc.mcp import MCPExporter
 
 # Create Connect-RPC ASGI app
-app = ConnecpyASGIApp()
+app = ASGIApp()
 app.mount(MathService())
 
 # Add MCP support via HTTP/SSE

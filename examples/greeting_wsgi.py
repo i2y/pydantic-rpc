@@ -42,19 +42,7 @@ class Greeter:
         return HelloReply(message=f"Hello, {request.name}!")
 
 
-def app(environ, start_response):
-    """WSGI app.
-    This is a simple example of a WSGI app.
-
-    Args:
-        environ (dict): The WSGI environ.
-        start_response (callable): The WSGI start_response.
-    """
-    start_response("200 OK", [("Content-Type", "text/plain")])
-    return [b"Hello, world!"]
-
-
-app = WSGIApp(app)
+app = WSGIApp()
 app.mount_objs(Greeter())
 
 if __name__ == "__main__":

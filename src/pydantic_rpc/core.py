@@ -9,7 +9,7 @@ import sys
 import time
 import types
 from typing import Union
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from concurrent import futures
 from pathlib import Path
 from posixpath import basename
@@ -35,8 +35,6 @@ from grpc_health.v1.health import HealthServicer
 from grpc_reflection.v1alpha import reflection
 from grpc_tools import protoc
 from pydantic import BaseModel, ValidationError
-from sonora.asgi import grpcASGI
-from sonora.wsgi import grpcWSGI
 
 ###############################################################################
 # 1. Message definitions & converter extensions
@@ -838,7 +836,8 @@ def connect_obj_with_stub_connecpy(
         if method.__name__.startswith("_"):
             continue
         a_method = implement_stub_method(method)
-        setattr(ConcreteServiceClass, method_name, a_method)
+        # Use the original snake_case method name for Connecpy v2.2.0 compatibility
+        setattr(ConcreteServiceClass, method.__name__, a_method)
 
     return ConcreteServiceClass
 
@@ -847,7 +846,7 @@ def connect_obj_with_stub_async_connecpy(
     connecpy_module: Any, pb2_module: Any, obj: object
 ) -> type:
     """
-    Connect a Python service object to a Connecpy stub for async methods.
+    Connect a Python service object to a Connecpy stub for async methods with streaming support.
     """
     service_class = obj.__class__
     stub_class_name = service_class.__name__
@@ -857,12 +856,13 @@ def connect_obj_with_stub_async_connecpy(
         pass
 
     def implement_stub_method(
-        method: Callable[..., Awaitable[Message]],
+        method: Callable[..., Any],
     ) -> Callable[[object, Any, Any], Any]:
         sig = inspect.signature(method)
-        arg_type = get_request_arg_type(sig)
-        converter = generate_message_converter(arg_type)
+        input_type = get_request_arg_type(sig)
+        is_input_stream = is_stream_type(input_type)
         response_type = sig.return_annotation
+        is_output_stream = is_stream_type(response_type)
         size_of_parameters = len(sig.parameters)
 
         match size_of_parameters:
@@ -891,63 +891,215 @@ def connect_obj_with_stub_async_connecpy(
 
                 return stub_method0
 
-            case 1:
+            case 1 | 2:
+                if is_input_stream:
+                    # Client streaming or bidirectional streaming
+                    input_item_type = get_args(input_type)[0]
+                    item_converter = generate_message_converter(input_item_type)
 
-                async def stub_method1(
-                    self: object,
-                    request: Any,
-                    context: Any,
-                    method: Callable[..., Awaitable[Message]] = method,
-                ) -> Any:
-                    _ = self
-                    try:
-                        if is_none_type(arg_type):
-                            resp_obj = await method(None)
-                        else:
-                            arg = converter(request)
-                            resp_obj = await method(arg)
+                    async def convert_iterator(
+                        proto_iter: AsyncIterator[Any],
+                    ) -> AsyncIterator[Message]:
+                        async for proto in proto_iter:
+                            result = item_converter(proto)
+                            if result is None:
+                                raise TypeError(
+                                    f"Unexpected None result from converter for type {input_item_type}"
+                                )
+                            yield result
 
-                        if is_none_type(response_type):
-                            return empty_pb2.Empty()  # type: ignore
-                        else:
-                            return convert_python_message_to_proto(
-                                resp_obj, response_type, pb2_module
-                            )
-                    except ValidationError as e:
-                        await context.abort(Errors.INVALID_ARGUMENT, str(e))
-                    except Exception as e:
-                        await context.abort(Errors.INTERNAL, str(e))
+                    if is_output_stream:
+                        # Bidirectional streaming
+                        output_item_type = get_args(response_type)[0]
 
-                return stub_method1
+                        if size_of_parameters == 1:
 
-            case 2:
+                            async def stub_method(
+                                self: object,
+                                request_iterator: AsyncIterator[Any],
+                                context: Any,
+                            ) -> AsyncIterator[Any]:
+                                _ = self
+                                try:
+                                    arg_iter = convert_iterator(request_iterator)
+                                    async for resp_obj in method(arg_iter):
+                                        yield convert_python_message_to_proto(
+                                            resp_obj, output_item_type, pb2_module
+                                        )
+                                except ValidationError as e:
+                                    await context.abort(Errors.INVALID_ARGUMENT, str(e))
+                                except Exception as e:
+                                    await context.abort(Errors.INTERNAL, str(e))
+                        else:  # size_of_parameters == 2
 
-                async def stub_method2(
-                    self: object,
-                    request: Any,
-                    context: Any,
-                    method: Callable[..., Awaitable[Message]] = method,
-                ) -> Any:
-                    _ = self
-                    try:
-                        if is_none_type(arg_type):
-                            resp_obj = await method(None, context)
-                        else:
-                            arg = converter(request)
-                            resp_obj = await method(arg, context)
+                            async def stub_method(
+                                self: object,
+                                request_iterator: AsyncIterator[Any],
+                                context: Any,
+                            ) -> AsyncIterator[Any]:
+                                _ = self
+                                try:
+                                    arg_iter = convert_iterator(request_iterator)
+                                    async for resp_obj in method(arg_iter, context):
+                                        yield convert_python_message_to_proto(
+                                            resp_obj, output_item_type, pb2_module
+                                        )
+                                except ValidationError as e:
+                                    await context.abort(Errors.INVALID_ARGUMENT, str(e))
+                                except Exception as e:
+                                    await context.abort(Errors.INTERNAL, str(e))
 
-                        if is_none_type(response_type):
-                            return empty_pb2.Empty()  # type: ignore
-                        else:
-                            return convert_python_message_to_proto(
-                                resp_obj, response_type, pb2_module
-                            )
-                    except ValidationError as e:
-                        await context.abort(Errors.INVALID_ARGUMENT, str(e))
-                    except Exception as e:
-                        await context.abort(Errors.INTERNAL, str(e))
+                        return stub_method
+                    else:
+                        # Client streaming
+                        if size_of_parameters == 1:
 
-                return stub_method2
+                            async def stub_method(
+                                self: object,
+                                request_iterator: AsyncIterator[Any],
+                                context: Any,
+                            ) -> Any:
+                                _ = self
+                                try:
+                                    arg_iter = convert_iterator(request_iterator)
+                                    resp_obj = await method(arg_iter)
+                                    if is_none_type(response_type):
+                                        return empty_pb2.Empty()  # type: ignore
+                                    return convert_python_message_to_proto(
+                                        resp_obj, response_type, pb2_module
+                                    )
+                                except ValidationError as e:
+                                    await context.abort(Errors.INVALID_ARGUMENT, str(e))
+                                except Exception as e:
+                                    await context.abort(Errors.INTERNAL, str(e))
+                        else:  # size_of_parameters == 2
+
+                            async def stub_method(
+                                self: object,
+                                request_iterator: AsyncIterator[Any],
+                                context: Any,
+                            ) -> Any:
+                                _ = self
+                                try:
+                                    arg_iter = convert_iterator(request_iterator)
+                                    resp_obj = await method(arg_iter, context)
+                                    if is_none_type(response_type):
+                                        return empty_pb2.Empty()  # type: ignore
+                                    return convert_python_message_to_proto(
+                                        resp_obj, response_type, pb2_module
+                                    )
+                                except ValidationError as e:
+                                    await context.abort(Errors.INVALID_ARGUMENT, str(e))
+                                except Exception as e:
+                                    await context.abort(Errors.INTERNAL, str(e))
+
+                        return stub_method
+                else:
+                    # Unary request
+                    converter = generate_message_converter(input_type)
+
+                    if is_output_stream:
+                        # Server streaming
+                        output_item_type = get_args(response_type)[0]
+
+                        if size_of_parameters == 1:
+
+                            async def stub_method(
+                                self: object,
+                                request: Any,
+                                context: Any,
+                            ) -> AsyncIterator[Any]:
+                                _ = self
+                                try:
+                                    if is_none_type(input_type):
+                                        arg = None
+                                    else:
+                                        arg = converter(request)
+                                    async for resp_obj in method(arg):
+                                        yield convert_python_message_to_proto(
+                                            resp_obj, output_item_type, pb2_module
+                                        )
+                                except ValidationError as e:
+                                    await context.abort(Errors.INVALID_ARGUMENT, str(e))
+                                except Exception as e:
+                                    await context.abort(Errors.INTERNAL, str(e))
+                        else:  # size_of_parameters == 2
+
+                            async def stub_method(
+                                self: object,
+                                request: Any,
+                                context: Any,
+                            ) -> AsyncIterator[Any]:
+                                _ = self
+                                try:
+                                    if is_none_type(input_type):
+                                        arg = None
+                                    else:
+                                        arg = converter(request)
+                                    async for resp_obj in method(arg, context):
+                                        yield convert_python_message_to_proto(
+                                            resp_obj, output_item_type, pb2_module
+                                        )
+                                except ValidationError as e:
+                                    await context.abort(Errors.INVALID_ARGUMENT, str(e))
+                                except Exception as e:
+                                    await context.abort(Errors.INTERNAL, str(e))
+
+                        return stub_method
+                    else:
+                        # Unary RPC
+                        if size_of_parameters == 1:
+
+                            async def stub_method(
+                                self: object,
+                                request: Any,
+                                context: Any,
+                            ) -> Any:
+                                _ = self
+                                try:
+                                    if is_none_type(input_type):
+                                        resp_obj = await method(None)
+                                    else:
+                                        arg = converter(request)
+                                        resp_obj = await method(arg)
+
+                                    if is_none_type(response_type):
+                                        return empty_pb2.Empty()  # type: ignore
+                                    else:
+                                        return convert_python_message_to_proto(
+                                            resp_obj, response_type, pb2_module
+                                        )
+                                except ValidationError as e:
+                                    await context.abort(Errors.INVALID_ARGUMENT, str(e))
+                                except Exception as e:
+                                    await context.abort(Errors.INTERNAL, str(e))
+                        else:  # size_of_parameters == 2
+
+                            async def stub_method(
+                                self: object,
+                                request: Any,
+                                context: Any,
+                            ) -> Any:
+                                _ = self
+                                try:
+                                    if is_none_type(input_type):
+                                        resp_obj = await method(None, context)
+                                    else:
+                                        arg = converter(request)
+                                        resp_obj = await method(arg, context)
+
+                                    if is_none_type(response_type):
+                                        return empty_pb2.Empty()  # type: ignore
+                                    else:
+                                        return convert_python_message_to_proto(
+                                            resp_obj, response_type, pb2_module
+                                        )
+                                except ValidationError as e:
+                                    await context.abort(Errors.INVALID_ARGUMENT, str(e))
+                                except Exception as e:
+                                    await context.abort(Errors.INTERNAL, str(e))
+
+                        return stub_method
 
             case _:
                 raise Exception("Method must have 0, 1, or 2 parameters")
@@ -955,10 +1107,14 @@ def connect_obj_with_stub_async_connecpy(
     for method_name, method in get_rpc_methods(obj):
         if method.__name__.startswith("_"):
             continue
-        if not asyncio.iscoroutinefunction(method):
-            raise Exception("Method must be async", method_name)
+        # Check for async generator functions for streaming support
+        if not (
+            asyncio.iscoroutinefunction(method) or inspect.isasyncgenfunction(method)
+        ):
+            raise Exception(f"Method {method_name} must be async or async generator")
         a_method = implement_stub_method(method)
-        setattr(ConcreteServiceClass, method_name, a_method)
+        # Use the original snake_case method name for Connecpy v2.2.0 compatibility
+        setattr(ConcreteServiceClass, method.__name__, a_method)
 
     return ConcreteServiceClass
 
@@ -1510,11 +1666,11 @@ def generate_message_definition(
                         fields.append("//   length of " + str(metadata_item.len))
                     case annotated_types.MinLen:
                         fields.append(
-                            "//   minimum length of " + str(metadata_item.min_len)
+                            "//   minimum length of " + str(metadata_item.min_length)
                         )
                     case annotated_types.MaxLen:
                         fields.append(
-                            "//   maximum length of " + str(metadata_item.max_len)
+                            "//   maximum length of " + str(metadata_item.max_length)
                         )
                     case _:
                         fields.append("//   " + str(metadata_item))
@@ -2548,116 +2704,19 @@ class AsyncIOServer:
         print("gRPC server shutdown.")
 
 
-class WSGIApp:
-    """
-    A WSGI-compatible application that can serve gRPC via sonora's grpcWSGI.
-    Useful for embedding gRPC within an existing WSGI stack.
-    """
-
-    def __init__(self, app: Any):
-        self._app: grpcWSGI = grpcWSGI(app)
-        self._service_names: list[str] = []
-        self._package_name: str = ""
-
-    def mount(self, obj: object, package_name: str = ""):
-        """Generate and compile proto files, then mount the service implementation."""
-        pb2_grpc_module, pb2_module = generate_and_compile_proto(obj, package_name) or (
-            None,
-            None,
-        )
-        self.mount_using_pb2_modules(pb2_grpc_module, pb2_module, obj)
-
-    def mount_using_pb2_modules(
-        self, pb2_grpc_module: Any, pb2_module: Any, obj: object
-    ):
-        """Connect the compiled gRPC modules with the service implementation."""
-        concreteServiceClass = connect_obj_with_stub(pb2_grpc_module, pb2_module, obj)
-        service_name = obj.__class__.__name__
-        service_impl = concreteServiceClass()
-        getattr(pb2_grpc_module, f"add_{service_name}Servicer_to_server")(
-            service_impl, self._app
-        )
-        full_service_name = pb2_module.DESCRIPTOR.services_by_name[
-            service_name
-        ].full_name
-        self._service_names.append(full_service_name)
-
-    def mount_objs(self, *objs: object):
-        """Mount multiple service objects into this WSGI app."""
-        for obj in objs:
-            self.mount(obj, self._package_name)
-
-    def __call__(
-        self,
-        environ: dict[str, Any],
-        start_response: Callable[[str, list[tuple[str, str]]], None],
-    ) -> Any:
-        """WSGI entry point."""
-        return self._app(environ, start_response)
-
-
-class ASGIApp:
-    """
-    An ASGI-compatible application that can serve gRPC via sonora's grpcASGI.
-    Useful for embedding gRPC within an existing ASGI stack.
-    """
-
-    def __init__(self, app: Any):
-        self._app: grpcASGI = grpcASGI(app)
-        self._service_names: list[str] = []
-        self._package_name: str = ""
-
-    def mount(self, obj: object, package_name: str = ""):
-        """Generate and compile proto files, then mount the async service implementation."""
-        pb2_grpc_module, pb2_module = generate_and_compile_proto(obj, package_name) or (
-            None,
-            None,
-        )
-        self.mount_using_pb2_modules(pb2_grpc_module, pb2_module, obj)
-
-    def mount_using_pb2_modules(
-        self, pb2_grpc_module: Any, pb2_module: Any, obj: object
-    ):
-        """Connect the compiled gRPC modules with the async service implementation."""
-        concreteServiceClass = connect_obj_with_stub_async(
-            pb2_grpc_module, pb2_module, obj
-        )
-        service_name = obj.__class__.__name__
-        service_impl = concreteServiceClass()
-        getattr(pb2_grpc_module, f"add_{service_name}Servicer_to_server")(
-            service_impl, self._app
-        )
-        full_service_name = pb2_module.DESCRIPTOR.services_by_name[
-            service_name
-        ].full_name
-        self._service_names.append(full_service_name)
-
-    def mount_objs(self, *objs: object):
-        """Mount multiple service objects into this ASGI app."""
-        for obj in objs:
-            self.mount(obj, self._package_name)
-
-    async def __call__(
-        self,
-        scope: dict[str, Any],
-        receive: Callable[[], Any],
-        send: Callable[[dict[str, Any]], Any],
-    ) -> Any:
-        """ASGI entry point."""
-        _ = await self._app(scope, receive, send)
-
-
 def get_connecpy_asgi_app_class(connecpy_module: Any, service_name: str):
+    """Get the ASGI application class from connecpy module (Connecpy v2.x)."""
     return getattr(connecpy_module, f"{service_name}ASGIApplication")
 
 
 def get_connecpy_wsgi_app_class(connecpy_module: Any, service_name: str):
+    """Get the WSGI application class from connecpy module (Connecpy v2.x)."""
     return getattr(connecpy_module, f"{service_name}WSGIApplication")
 
 
-class ConnecpyASGIApp:
+class ASGIApp:
     """
-    An ASGI-compatible application that can serve Connect-RPC via Connecpy's ConnecpyASGIApp.
+    An ASGI-compatible application that can serve Connect-RPC via Connecpy.
     """
 
     def __init__(self):
@@ -2727,9 +2786,9 @@ class ConnecpyASGIApp:
         await send({"type": "http.response.body", "body": b"Not Found"})
 
 
-class ConnecpyWSGIApp:
+class WSGIApp:
     """
-    A WSGI-compatible application that can serve Connect-RPC via Connecpy's ConnecpyWSGIApp.
+    A WSGI-compatible application that can serve Connect-RPC via Connecpy.
     """
 
     def __init__(self):
@@ -2774,8 +2833,10 @@ class ConnecpyWSGIApp:
     def __call__(
         self,
         environ: dict[str, Any],
-        start_response: Callable[[str, list[tuple[str, str]]], None],
-    ) -> Any:
+        start_response: Callable[
+            [str, list[tuple[str, str]]], Callable[[bytes], object]
+        ],
+    ) -> Iterable[bytes]:
         """WSGI entry point with routing for multiple services."""
         path = environ.get("PATH_INFO", "")
 

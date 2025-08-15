@@ -40,16 +40,5 @@ class Greeter:
         return HelloReply(message=f"Hello, {request.name}!")
 
 
-async def app(scope, receive, send):
-    """ASGI application.
-
-    Args:
-        scope (dict): The ASGI scope.
-        receive (callable): The receive function.
-        send (callable): The send function.
-    """
-    pass
-
-
-app = ASGIApp(app)
+app = ASGIApp()
 app.mount_objs(Greeter())

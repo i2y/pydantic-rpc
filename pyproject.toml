@@ -6,14 +6,13 @@ authors = [
     { name = "Yasushi Itoh" }
 ]
 dependencies = [
-    "annotated-types>=0.5.0",
+    "annotated-types==0.7.0",
     "pydantic>=2.1.1",
     "grpcio>=1.56.2",
     "grpcio-tools>=1.56.2",
     "grpcio-reflection>=1.56.2",
     "grpcio-health-checking>=1.56.2",
-    "sonora>=0.2.3",
-    "connecpy==2.0.0",
+    "connecpy>=2.2.0",
     "mcp>=1.9.4",
     "starlette>=0.27.0",
 ]

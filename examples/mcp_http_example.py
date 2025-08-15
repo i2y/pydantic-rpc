@@ -3,7 +3,7 @@
 
 import asyncio
 import uvicorn
-from pydantic_rpc import Message, ConnecpyASGIApp
+from pydantic_rpc import Message, ASGIApp
 from pydantic_rpc.mcp import MCPExporter
 
 
@@ -80,7 +80,7 @@ def create_app():
     service = CalculatorService()
 
     # Create Connect-RPC ASGI app
-    connect_app = ConnecpyASGIApp()
+    connect_app = ASGIApp()
     connect_app.mount(service)
 
     # Add MCP support

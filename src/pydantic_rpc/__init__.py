@@ -5,8 +5,6 @@ from .core import (
     AsyncIOServer,
     WSGIApp,
     ASGIApp,
-    ConnecpyASGIApp,
-    ConnecpyWSGIApp,
     Message,
 )
 
@@ -15,8 +13,6 @@ __all__ = [
     "AsyncIOServer",
     "WSGIApp",
     "ASGIApp",
-    "ConnecpyWSGIApp",
-    "ConnecpyASGIApp",
     "Message",
 ]
 

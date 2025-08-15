@@ -1,9 +1,8 @@
 from io import BytesIO
 import pytest
-from collections.abc import Callable, Awaitable
 from typing import Any, AsyncIterator
 
-from pydantic_rpc.core import ASGIApp, WSGIApp, ConnecpyWSGIApp, ConnecpyASGIApp
+from pydantic_rpc.core import ASGIApp, WSGIApp
 from pydantic_rpc import Message
 
 import random
@@ -121,86 +120,14 @@ class StreamStreamService:
             yield StreamStreamResponse(text=req.text.upper())
 
 
-def base_wsgi_app(
-    environ: dict[str, Any],
-    start_response: Callable[[str, list[tuple[str, str]]], None],
-) -> list[bytes]:
-    _ = environ
-    start_response("200 OK", [("Content-Type", "text/plain")])
-    return [b"Hello, world!"]
-
-
-async def base_asgi_app(
-    scope: dict[str, Any],
-    receive: Callable[[], Awaitable[dict[str, Any]]],
-    send: Callable[[dict[str, Any]], Awaitable[None]],
-) -> None:
-    _ = scope
-    _ = receive
-    await send(
-        {
-            "type": "http.response.start",
-            "status": 200,
-            "headers": [(b"content-type", b"text/plain")],
-        }
-    )
-    await send({"type": "http.response.body", "body": b"Hello, world!"})
-
-
-@pytest.mark.asyncio
-async def test_asgi():
-    app = ASGIApp(base_asgi_app)
-    echo_service = AsyncEchoService()
-    app.mount(echo_service)
-
-    sent_messages: list[dict[str, Any]] = []
-
-    async def test_send(message: dict[str, Any]) -> None:
-        sent_messages.append(message)
-
-    async def test_receive() -> dict[str, Any]:
-        return {"type": "http.request", "body": b""}
-
-    await app.__call__(
-        {
-            "type": "http",
-            "method": "POST",
-            "path": "/EchoService/echo",
-        },
-        test_receive,
-        test_send,
-    )
-
-    assert len(sent_messages) > 0
-
-
-def test_wsgi():
-    app = WSGIApp(base_wsgi_app)
-    echo_service = EchoService()
-    app.mount(echo_service)
-
-    def start_response(status: str, headers: list[tuple[str, str]]) -> None:
-        _ = headers
-        assert status == "200 OK"
-
-    app.__call__(
-        {
-            "REQUEST_METHOD": "POST",
-            "PATH_INFO": "/EchoService/echo",
-            "SERVER_PROTOCOL": "HTTP/1.1",
-        },
-        start_response,
-    )
-
-
 @pytest.mark.skipif(
     should_skip_connecpy_tests(),
     reason="Skipping connecpy tests because connecpy is not installed",
 )
 @pytest.mark.asyncio
-async def test_connecpy_asgi():
-    """Test ConnecpyASGIApp with EchoService."""
-    app = ConnecpyASGIApp()
+async def test_asgi():
+    """Test ASGIApp with EchoService."""
+    app = ASGIApp()
     echo_service = AsyncEchoService()
     app.mount(echo_service)
 
@@ -242,8 +169,8 @@ async def test_connecpy_asgi():
     should_skip_connecpy_tests(),
     reason="Skipping connecpy tests because connecpy is not installed",
 )
-def test_connecpy_wsgi():
-    app = ConnecpyWSGIApp()
+def test_wsgi():
+    app = WSGIApp()
     echo_service = EchoService()
     app.mount(echo_service)
 
