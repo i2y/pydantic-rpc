@@ -35,6 +35,7 @@ from grpc_health.v1.health import HealthServicer
 from grpc_reflection.v1alpha import reflection
 from grpc_tools import protoc
 from pydantic import BaseModel, ValidationError
+from .decorators import get_method_options, has_http_option
 
 ###############################################################################
 # 1. Message definitions & converter extensions
@@ -1706,6 +1707,39 @@ def is_generic_alias(annotation: Any) -> bool:
     return get_origin(annotation) is not None
 
 
+def format_method_options(method: Any) -> list[str]:
+    """
+    Format protobuf options for a method.
+
+    Args:
+        method: The method to get options from
+
+    Returns:
+        List of formatted option strings
+    """
+    metadata = get_method_options(method)
+    if metadata is None:
+        return []
+
+    return metadata.to_proto_strings()
+
+
+def check_uses_http_options(obj: object) -> bool:
+    """
+    Check if any method in the service uses HTTP options.
+
+    Args:
+        obj: Service instance
+
+    Returns:
+        True if any method has HTTP options
+    """
+    for method_name, method in get_rpc_methods(obj):
+        if has_http_option(method):
+            return True
+    return False
+
+
 def generate_proto(obj: object, package_name: str = "") -> str:
     """
     Generate a .proto definition from a service class.
@@ -1726,6 +1760,7 @@ def generate_proto(obj: object, package_name: str = "") -> str:
     uses_timestamp = False
     uses_duration = False
     uses_empty = False
+    uses_http_options = check_uses_http_options(obj)
 
     def check_and_set_well_known_types_for_fields(py_type: Any):
         """Check well-known types for field annotations (excludes None/Empty)."""
@@ -1885,9 +1920,24 @@ def generate_proto(obj: object, package_name: str = "") -> str:
                 else output_msg_type.__name__
             )
 
-        rpc_definitions.append(
-            f"rpc {method_name} ({input_str}) returns ({output_str});"
-        )
+        # Get method options
+        method_options = format_method_options(method)
+
+        if method_options:
+            # RPC with options - use block format
+            rpc_definitions.append(
+                f"rpc {method_name} ({input_str}) returns ({output_str}) {{"
+            )
+            for option_str in method_options:
+                # Indent each option line
+                for line in option_str.split("\n"):
+                    rpc_definitions.append(f"  {line}")
+            rpc_definitions.append("}")
+        else:
+            # RPC without options - use simple format
+            rpc_definitions.append(
+                f"rpc {method_name} ({input_str}) returns ({output_str});"
+            )
 
     if not package_name:
         if service_name.endswith("Service"):
@@ -1897,6 +1947,8 @@ def generate_proto(obj: object, package_name: str = "") -> str:
         package_name = package_name.lower() + ".v1"
 
     imports: list[str] = []
+    if uses_http_options:
+        imports.append('import "google/api/annotations.proto";')
     if uses_timestamp:
         imports.append('import "google/protobuf/timestamp.proto";')
     if uses_duration:
