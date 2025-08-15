@@ -711,7 +711,8 @@ def connect_obj_with_stub_connecpy(
         if method.__name__.startswith("_"):
             continue
         a_method = implement_stub_method(method)
-        setattr(ConcreteServiceClass, method_name, a_method)
+        # Use the original snake_case method name for Connecpy v2.2.0 compatibility
+        setattr(ConcreteServiceClass, method.__name__, a_method)
 
     return ConcreteServiceClass
 
@@ -962,7 +963,8 @@ def connect_obj_with_stub_async_connecpy(
         ):
             raise Exception(f"Method {method_name} must be async or async generator")
         a_method = implement_stub_method(method)
-        setattr(ConcreteServiceClass, method_name, a_method)
+        # Use the original snake_case method name for Connecpy v2.2.0 compatibility
+        setattr(ConcreteServiceClass, method.__name__, a_method)
 
     return ConcreteServiceClass
 
@@ -2331,11 +2333,21 @@ class AsyncIOServer:
 
 
 def get_connecpy_asgi_app_class(connecpy_module: Any, service_name: str):
-    return getattr(connecpy_module, f"{service_name}ASGIApplication")
+    # Try the new naming convention first (Connecpy v2.x)
+    try:
+        return getattr(connecpy_module, f"{service_name}ASGIApplication")
+    except AttributeError:
+        # Fallback for compatibility
+        return getattr(connecpy_module, f"{service_name}ASGIApp")
 
 
 def get_connecpy_wsgi_app_class(connecpy_module: Any, service_name: str):
-    return getattr(connecpy_module, f"{service_name}WSGIApplication")
+    # Try the new naming convention first (Connecpy v2.x)
+    try:
+        return getattr(connecpy_module, f"{service_name}WSGIApplication")
+    except AttributeError:
+        # Fallback for compatibility
+        return getattr(connecpy_module, f"{service_name}WSGIApp")
 
 
 class ASGIApp:

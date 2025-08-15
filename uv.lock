@@ -152,11 +152,15 @@ wheels = [
 
 [[package]]
 name = "connecpy"
-version = "2.1.0"
-source = { git = "https://github.com/i2y/connecpy.git?rev=bd0075d75cd0f90f140e830424a52bff4951e856#bd0075d75cd0f90f140e830424a52bff4951e856" }
+version = "2.2.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
     { name = "protobuf" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5a/83/e937cf8f76f4e748aebb1124dd80a1ea13edde318250f143f339e892001d/connecpy-2.2.0.tar.gz", hash = "sha256:750ba803c8446a33bc6251207f0875f13a564d9f2fbd7c1ab5f4cf19e9655154", size = 34301, upload-time = "2025-08-15T04:45:52.578Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6c/95/9fe312a22ebbe238d0342dd08a985b2d9bfb95d7a808958b606859a3ebaa/connecpy-2.2.0-py3-none-any.whl", hash = "sha256:770d6b0133507f1937429e17056b7fc2d9589e2ac8a52afa4ea45fd56fd734a5", size = 45032, upload-time = "2025-08-15T04:45:51.367Z" },
 ]
 
 [[package]]
@@ -844,7 +848,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "annotated-types", specifier = ">=0.5.0" },
-    { name = "connecpy", git = "https://github.com/i2y/connecpy.git?rev=bd0075d75cd0f90f140e830424a52bff4951e856" },
+    { name = "connecpy", specifier = ">=2.2.0" },
     { name = "grpcio", specifier = ">=1.56.2" },
     { name = "grpcio-health-checking", specifier = ">=1.56.2" },
     { name = "grpcio-reflection", specifier = ">=1.56.2" },

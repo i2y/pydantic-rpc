@@ -12,7 +12,7 @@ dependencies = [
     "grpcio-tools>=1.56.2",
     "grpcio-reflection>=1.56.2",
     "grpcio-health-checking>=1.56.2",
-    "connecpy @ git+https://github.com/i2y/connecpy.git@bd0075d75cd0f90f140e830424a52bff4951e856",
+    "connecpy>=2.2.0",
     "mcp>=1.9.4",
     "starlette>=0.27.0",
 ]

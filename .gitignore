@@ -22,3 +22,12 @@ tests/**/*.py
 tests/**/*.pyi
 !tests/**/test_*.py
 .coverage
+
+# Generated protobuf and connecpy files
+examples/*_pb2.py
+examples/*_pb2_grpc.py
+examples/*_pb2.pyi
+examples/*_connecpy.py
+examples/*.proto
+# Keep manually created proto files if any
+!examples/manual_*.proto

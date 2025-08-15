@@ -131,22 +131,28 @@ uv run foobar_client.py
 
 ## 🤝 Connecpy (Connect-RPC) Example
 
-### 🔧 Server (`greeting_connecpy.py`)
+### 🔧 Server (`greeting_asgi.py`)
 
 A Connect-RPC ASGI application using PydanticRPC + connecpy.
 
 **Usage:**
 
 ```bash
-uv run hypercorn --bind :3000 greeting_connecpy:app
+uv run hypercorn --bind :3000 greeting_asgi:app
 ```
 
-### 🔗 Client (`greeter_client_connecpy.py`)
+Or using uvicorn:
+
+```bash
+uv run uvicorn greeting_asgi:app --port 3000
+```
+
+### 🔗 Client (`greeter_connecpy_client.py`)
 
 A Connect-RPC client to interact with the server.
 
 **Usage:**
 
 ```bash
-uv run greeter_client_connecpy.py
+uv run greeter_connecpy_client.py
 ```
