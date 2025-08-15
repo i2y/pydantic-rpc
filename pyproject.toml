@@ -1,6 +1,6 @@
 [project]
 name = "pydantic-rpc"
-version = "0.7.0"
+version = "0.8.0"
 description = "A Python library for building gRPC/ConnectRPC services with Pydantic models."
 authors = [
     { name = "Yasushi Itoh" }
@@ -23,8 +23,8 @@ requires-python = ">= 3.11"
 pydantic-rpc = "pydantic_rpc.core:main"
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["uv_build>=0.7.21,<0.8.0"]
+build-backend = "uv_build"
 
 [tool.uv]
 managed = true
@@ -35,9 +35,6 @@ dev-dependencies = [
     "pytest-asyncio>=0.20.3",
     "ruff>=0.9.4",
 ]
-
-[tool.hatch.metadata]
-allow-direct-references = true
 
 [tool.pytest.ini_options]
 markers = [

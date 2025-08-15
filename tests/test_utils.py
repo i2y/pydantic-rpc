@@ -369,7 +369,7 @@ class TestServiceIntrospection:
         """Test error handling for invalid method signatures."""
         import inspect
 
-        def invalid_method():
+        def no_params_method():
             pass
 
         def too_many_params(a: int, b: int, c: int):
@@ -378,15 +378,13 @@ class TestServiceIntrospection:
             _ = c
             pass
 
-        with pytest.raises(
-            Exception, match="Method must have exactly one or two parameters"
-        ):
-            sig = inspect.signature(invalid_method)
-            get_request_arg_type(sig)
+        # No parameters should now be allowed (returns None)
+        sig = inspect.signature(no_params_method)
+        result = get_request_arg_type(sig)
+        assert result is None  # No params means empty request
 
-        with pytest.raises(
-            Exception, match="Method must have exactly one or two parameters"
-        ):
+        # But 3+ parameters should still raise an error
+        with pytest.raises(Exception, match="Method must have 0, 1, or 2 parameters"):
             sig = inspect.signature(too_many_params)
             get_request_arg_type(sig)
 
