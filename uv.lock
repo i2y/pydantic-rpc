@@ -847,7 +847,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "annotated-types", specifier = ">=0.5.0" },
+    { name = "annotated-types", specifier = "==0.7.0" },
     { name = "connecpy", specifier = ">=2.2.0" },
     { name = "grpcio", specifier = ">=1.56.2" },
     { name = "grpcio-health-checking", specifier = ">=1.56.2" },

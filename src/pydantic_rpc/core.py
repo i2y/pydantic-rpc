@@ -9,7 +9,7 @@ import sys
 import time
 import types
 from typing import Union
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from concurrent import futures
 from pathlib import Path
 from posixpath import basename

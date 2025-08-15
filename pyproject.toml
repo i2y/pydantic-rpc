@@ -6,7 +6,7 @@ authors = [
     { name = "Yasushi Itoh" }
 ]
 dependencies = [
-    "annotated-types>=0.5.0",
+    "annotated-types==0.7.0",
     "pydantic>=2.1.1",
     "grpcio>=1.56.2",
     "grpcio-tools>=1.56.2",
