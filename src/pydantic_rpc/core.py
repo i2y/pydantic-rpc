@@ -892,215 +892,214 @@ def connect_obj_with_stub_async_connecpy(
                 return stub_method0
 
             case 1 | 2:
+                if is_input_stream:
+                    # Client streaming or bidirectional streaming
+                    input_item_type = get_args(input_type)[0]
+                    item_converter = generate_message_converter(input_item_type)
 
-        if is_input_stream:
-            # Client streaming or bidirectional streaming
-            input_item_type = get_args(input_type)[0]
-            item_converter = generate_message_converter(input_item_type)
-
-            async def convert_iterator(
-                proto_iter: AsyncIterator[Any],
-            ) -> AsyncIterator[Message]:
-                async for proto in proto_iter:
-                    result = item_converter(proto)
-                    if result is None:
-                        raise TypeError(
-                            f"Unexpected None result from converter for type {input_item_type}"
-                        )
-                    yield result
-
-            if is_output_stream:
-                # Bidirectional streaming
-                output_item_type = get_args(response_type)[0]
-
-                if size_of_parameters == 1:
-
-                    async def stub_method(
-                        self: object,
-                        request_iterator: AsyncIterator[Any],
-                        context: Any,
-                    ) -> AsyncIterator[Any]:
-                        _ = self
-                        try:
-                            arg_iter = convert_iterator(request_iterator)
-                            async for resp_obj in method(arg_iter):
-                                yield convert_python_message_to_proto(
-                                    resp_obj, output_item_type, pb2_module
+                    async def convert_iterator(
+                        proto_iter: AsyncIterator[Any],
+                    ) -> AsyncIterator[Message]:
+                        async for proto in proto_iter:
+                            result = item_converter(proto)
+                            if result is None:
+                                raise TypeError(
+                                    f"Unexpected None result from converter for type {input_item_type}"
                                 )
-                        except ValidationError as e:
-                            await context.abort(Errors.INVALID_ARGUMENT, str(e))
-                        except Exception as e:
-                            await context.abort(Errors.INTERNAL, str(e))
-                else:  # size_of_parameters == 2
+                            yield result
 
-                    async def stub_method(
-                        self: object,
-                        request_iterator: AsyncIterator[Any],
-                        context: Any,
-                    ) -> AsyncIterator[Any]:
-                        _ = self
-                        try:
-                            arg_iter = convert_iterator(request_iterator)
-                            async for resp_obj in method(arg_iter, context):
-                                yield convert_python_message_to_proto(
-                                    resp_obj, output_item_type, pb2_module
-                                )
-                        except ValidationError as e:
-                            await context.abort(Errors.INVALID_ARGUMENT, str(e))
-                        except Exception as e:
-                            await context.abort(Errors.INTERNAL, str(e))
+                    if is_output_stream:
+                        # Bidirectional streaming
+                        output_item_type = get_args(response_type)[0]
 
-                return stub_method
-            else:
-                # Client streaming
-                if size_of_parameters == 1:
+                        if size_of_parameters == 1:
 
-                    async def stub_method(
-                        self: object,
-                        request_iterator: AsyncIterator[Any],
-                        context: Any,
-                    ) -> Any:
-                        _ = self
-                        try:
-                            arg_iter = convert_iterator(request_iterator)
-                            resp_obj = await method(arg_iter)
-                            if is_none_type(response_type):
-                                return empty_pb2.Empty()  # type: ignore
-                            return convert_python_message_to_proto(
-                                resp_obj, response_type, pb2_module
-                            )
-                        except ValidationError as e:
-                            await context.abort(Errors.INVALID_ARGUMENT, str(e))
-                        except Exception as e:
-                            await context.abort(Errors.INTERNAL, str(e))
-                else:  # size_of_parameters == 2
+                            async def stub_method(
+                                self: object,
+                                request_iterator: AsyncIterator[Any],
+                                context: Any,
+                            ) -> AsyncIterator[Any]:
+                                _ = self
+                                try:
+                                    arg_iter = convert_iterator(request_iterator)
+                                    async for resp_obj in method(arg_iter):
+                                        yield convert_python_message_to_proto(
+                                            resp_obj, output_item_type, pb2_module
+                                        )
+                                except ValidationError as e:
+                                    await context.abort(Errors.INVALID_ARGUMENT, str(e))
+                                except Exception as e:
+                                    await context.abort(Errors.INTERNAL, str(e))
+                        else:  # size_of_parameters == 2
 
-                    async def stub_method(
-                        self: object,
-                        request_iterator: AsyncIterator[Any],
-                        context: Any,
-                    ) -> Any:
-                        _ = self
-                        try:
-                            arg_iter = convert_iterator(request_iterator)
-                            resp_obj = await method(arg_iter, context)
-                            if is_none_type(response_type):
-                                return empty_pb2.Empty()  # type: ignore
-                            return convert_python_message_to_proto(
-                                resp_obj, response_type, pb2_module
-                            )
-                        except ValidationError as e:
-                            await context.abort(Errors.INVALID_ARGUMENT, str(e))
-                        except Exception as e:
-                            await context.abort(Errors.INTERNAL, str(e))
+                            async def stub_method(
+                                self: object,
+                                request_iterator: AsyncIterator[Any],
+                                context: Any,
+                            ) -> AsyncIterator[Any]:
+                                _ = self
+                                try:
+                                    arg_iter = convert_iterator(request_iterator)
+                                    async for resp_obj in method(arg_iter, context):
+                                        yield convert_python_message_to_proto(
+                                            resp_obj, output_item_type, pb2_module
+                                        )
+                                except ValidationError as e:
+                                    await context.abort(Errors.INVALID_ARGUMENT, str(e))
+                                except Exception as e:
+                                    await context.abort(Errors.INTERNAL, str(e))
 
-                return stub_method
-        else:
-            # Unary request
-            converter = generate_message_converter(input_type)
+                        return stub_method
+                    else:
+                        # Client streaming
+                        if size_of_parameters == 1:
 
-                if is_output_stream:
-                    # Server streaming
-                    output_item_type = get_args(response_type)[0]
-
-                    if size_of_parameters == 1:
-
-                        async def stub_method(
-                            self: object,
-                            request: Any,
-                            context: Any,
-                        ) -> AsyncIterator[Any]:
-                            _ = self
-                            try:
-                                if is_none_type(input_type):
-                                    arg = None
-                                else:
-                                    arg = converter(request)
-                                async for resp_obj in method(arg):
-                                    yield convert_python_message_to_proto(
-                                        resp_obj, output_item_type, pb2_module
+                            async def stub_method(
+                                self: object,
+                                request_iterator: AsyncIterator[Any],
+                                context: Any,
+                            ) -> Any:
+                                _ = self
+                                try:
+                                    arg_iter = convert_iterator(request_iterator)
+                                    resp_obj = await method(arg_iter)
+                                    if is_none_type(response_type):
+                                        return empty_pb2.Empty()  # type: ignore
+                                    return convert_python_message_to_proto(
+                                        resp_obj, response_type, pb2_module
                                     )
-                            except ValidationError as e:
-                                await context.abort(Errors.INVALID_ARGUMENT, str(e))
-                            except Exception as e:
-                                await context.abort(Errors.INTERNAL, str(e))
-                    else:  # size_of_parameters == 2
+                                except ValidationError as e:
+                                    await context.abort(Errors.INVALID_ARGUMENT, str(e))
+                                except Exception as e:
+                                    await context.abort(Errors.INTERNAL, str(e))
+                        else:  # size_of_parameters == 2
 
-                        async def stub_method(
-                            self: object,
-                            request: Any,
-                            context: Any,
-                        ) -> AsyncIterator[Any]:
-                            _ = self
-                            try:
-                                if is_none_type(input_type):
-                                    arg = None
-                                else:
-                                    arg = converter(request)
-                                async for resp_obj in method(arg, context):
-                                    yield convert_python_message_to_proto(
-                                        resp_obj, output_item_type, pb2_module
+                            async def stub_method(
+                                self: object,
+                                request_iterator: AsyncIterator[Any],
+                                context: Any,
+                            ) -> Any:
+                                _ = self
+                                try:
+                                    arg_iter = convert_iterator(request_iterator)
+                                    resp_obj = await method(arg_iter, context)
+                                    if is_none_type(response_type):
+                                        return empty_pb2.Empty()  # type: ignore
+                                    return convert_python_message_to_proto(
+                                        resp_obj, response_type, pb2_module
                                     )
-                            except ValidationError as e:
-                                await context.abort(Errors.INVALID_ARGUMENT, str(e))
-                            except Exception as e:
-                                await context.abort(Errors.INTERNAL, str(e))
+                                except ValidationError as e:
+                                    await context.abort(Errors.INVALID_ARGUMENT, str(e))
+                                except Exception as e:
+                                    await context.abort(Errors.INTERNAL, str(e))
 
-                    return stub_method
+                        return stub_method
                 else:
-                    # Unary RPC
-                    if size_of_parameters == 1:
+                    # Unary request
+                    converter = generate_message_converter(input_type)
 
-                        async def stub_method(
-                            self: object,
-                            request: Any,
-                            context: Any,
-                        ) -> Any:
-                            _ = self
-                            try:
-                                if is_none_type(input_type):
-                                    resp_obj = await method(None)
-                                else:
-                                    arg = converter(request)
-                                    resp_obj = await method(arg)
+                    if is_output_stream:
+                        # Server streaming
+                        output_item_type = get_args(response_type)[0]
 
-                                if is_none_type(response_type):
-                                    return empty_pb2.Empty()  # type: ignore
-                                else:
-                                    return convert_python_message_to_proto(
-                                        resp_obj, response_type, pb2_module
-                                    )
-                            except ValidationError as e:
-                                await context.abort(Errors.INVALID_ARGUMENT, str(e))
-                            except Exception as e:
-                                await context.abort(Errors.INTERNAL, str(e))
-                    else:  # size_of_parameters == 2
+                        if size_of_parameters == 1:
 
-                        async def stub_method(
-                            self: object,
-                            request: Any,
-                            context: Any,
-                        ) -> Any:
-                            _ = self
-                            try:
-                                if is_none_type(input_type):
-                                    resp_obj = await method(None, context)
-                                else:
-                                    arg = converter(request)
-                                    resp_obj = await method(arg, context)
+                            async def stub_method(
+                                self: object,
+                                request: Any,
+                                context: Any,
+                            ) -> AsyncIterator[Any]:
+                                _ = self
+                                try:
+                                    if is_none_type(input_type):
+                                        arg = None
+                                    else:
+                                        arg = converter(request)
+                                    async for resp_obj in method(arg):
+                                        yield convert_python_message_to_proto(
+                                            resp_obj, output_item_type, pb2_module
+                                        )
+                                except ValidationError as e:
+                                    await context.abort(Errors.INVALID_ARGUMENT, str(e))
+                                except Exception as e:
+                                    await context.abort(Errors.INTERNAL, str(e))
+                        else:  # size_of_parameters == 2
 
-                                if is_none_type(response_type):
-                                    return empty_pb2.Empty()  # type: ignore
-                                else:
-                                    return convert_python_message_to_proto(
-                                        resp_obj, response_type, pb2_module
-                                    )
-                            except ValidationError as e:
-                                await context.abort(Errors.INVALID_ARGUMENT, str(e))
-                            except Exception as e:
-                                await context.abort(Errors.INTERNAL, str(e))
+                            async def stub_method(
+                                self: object,
+                                request: Any,
+                                context: Any,
+                            ) -> AsyncIterator[Any]:
+                                _ = self
+                                try:
+                                    if is_none_type(input_type):
+                                        arg = None
+                                    else:
+                                        arg = converter(request)
+                                    async for resp_obj in method(arg, context):
+                                        yield convert_python_message_to_proto(
+                                            resp_obj, output_item_type, pb2_module
+                                        )
+                                except ValidationError as e:
+                                    await context.abort(Errors.INVALID_ARGUMENT, str(e))
+                                except Exception as e:
+                                    await context.abort(Errors.INTERNAL, str(e))
 
-                    return stub_method
+                        return stub_method
+                    else:
+                        # Unary RPC
+                        if size_of_parameters == 1:
+
+                            async def stub_method(
+                                self: object,
+                                request: Any,
+                                context: Any,
+                            ) -> Any:
+                                _ = self
+                                try:
+                                    if is_none_type(input_type):
+                                        resp_obj = await method(None)
+                                    else:
+                                        arg = converter(request)
+                                        resp_obj = await method(arg)
+
+                                    if is_none_type(response_type):
+                                        return empty_pb2.Empty()  # type: ignore
+                                    else:
+                                        return convert_python_message_to_proto(
+                                            resp_obj, response_type, pb2_module
+                                        )
+                                except ValidationError as e:
+                                    await context.abort(Errors.INVALID_ARGUMENT, str(e))
+                                except Exception as e:
+                                    await context.abort(Errors.INTERNAL, str(e))
+                        else:  # size_of_parameters == 2
+
+                            async def stub_method(
+                                self: object,
+                                request: Any,
+                                context: Any,
+                            ) -> Any:
+                                _ = self
+                                try:
+                                    if is_none_type(input_type):
+                                        resp_obj = await method(None, context)
+                                    else:
+                                        arg = converter(request)
+                                        resp_obj = await method(arg, context)
+
+                                    if is_none_type(response_type):
+                                        return empty_pb2.Empty()  # type: ignore
+                                    else:
+                                        return convert_python_message_to_proto(
+                                            resp_obj, response_type, pb2_module
+                                        )
+                                except ValidationError as e:
+                                    await context.abort(Errors.INVALID_ARGUMENT, str(e))
+                                except Exception as e:
+                                    await context.abort(Errors.INTERNAL, str(e))
+
+                        return stub_method
 
             case _:
                 raise Exception("Method must have 0, 1, or 2 parameters")
