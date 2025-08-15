@@ -2705,21 +2705,13 @@ class AsyncIOServer:
 
 
 def get_connecpy_asgi_app_class(connecpy_module: Any, service_name: str):
-    # Try the new naming convention first (Connecpy v2.x)
-    try:
-        return getattr(connecpy_module, f"{service_name}ASGIApplication")
-    except AttributeError:
-        # Fallback for compatibility
-        return getattr(connecpy_module, f"{service_name}ASGIApp")
+    """Get the ASGI application class from connecpy module (Connecpy v2.x)."""
+    return getattr(connecpy_module, f"{service_name}ASGIApplication")
 
 
 def get_connecpy_wsgi_app_class(connecpy_module: Any, service_name: str):
-    # Try the new naming convention first (Connecpy v2.x)
-    try:
-        return getattr(connecpy_module, f"{service_name}WSGIApplication")
-    except AttributeError:
-        # Fallback for compatibility
-        return getattr(connecpy_module, f"{service_name}WSGIApp")
+    """Get the WSGI application class from connecpy module (Connecpy v2.x)."""
+    return getattr(connecpy_module, f"{service_name}WSGIApplication")
 
 
 class ASGIApp:
