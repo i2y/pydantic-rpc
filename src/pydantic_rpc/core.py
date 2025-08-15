@@ -1666,11 +1666,11 @@ def generate_message_definition(
                         fields.append("//   length of " + str(metadata_item.len))
                     case annotated_types.MinLen:
                         fields.append(
-                            "//   minimum length of " + str(metadata_item.min_len)
+                            "//   minimum length of " + str(metadata_item.min_length)
                         )
                     case annotated_types.MaxLen:
                         fields.append(
-                            "//   maximum length of " + str(metadata_item.max_len)
+                            "//   maximum length of " + str(metadata_item.max_length)
                         )
                     case _:
                         fields.append("//   " + str(metadata_item))
