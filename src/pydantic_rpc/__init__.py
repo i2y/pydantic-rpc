@@ -6,6 +6,13 @@ from .core import (
     WSGIApp,
     ASGIApp,
     Message,
+    generate_proto,
+)
+from .decorators import (
+    http_option,
+    proto_option,
+    get_method_options,
+    has_http_option,
 )
 
 __all__ = [
@@ -14,6 +21,11 @@ __all__ = [
     "WSGIApp",
     "ASGIApp",
     "Message",
+    "generate_proto",
+    "http_option",
+    "proto_option",
+    "get_method_options",
+    "has_http_option",
 ]
 
 # Optional MCP support
