@@ -309,6 +309,8 @@ curl -X POST http://localhost:8000/rpc/BookRPCService/GetBook \
 
 **Best for:** When you need both gRPC and HTTP/REST access to the same service.
 
+**Note:** pydantic-rpc provides the `@http_option` decorator that adds HTTP annotations to the generated proto file. These annotations can be used by tools like grpc-gateway to expose HTTP endpoints.
+
 ```python
 # service_with_http_options.py
 from pydantic_rpc import AsyncIOServer, Message, http_option, generate_proto
@@ -548,7 +550,7 @@ services:
 
 The choice between gRPC and Connect RPC depends on your specific requirements:
 
-- **Use gRPC** when you need protocol compatibility, maximum performance, or advanced streaming
+- **Use gRPC** when you need protocol compatibility with existing gRPC services or maximum performance
 - **Use Connect RPC** when you need simplicity, browser compatibility, or single-process deployment
 - **Use both** when different clients have different requirements
 
