@@ -71,7 +71,7 @@ class BookService:
 if __name__ == "__main__":
     server = AsyncIOServer()
     print("Starting gRPC server on port 50051")
-    asyncio.run(server.run(BookService(), port=50051))
+    asyncio.run(server.run(BookService()))  # Default port is 50051
 ```
 
 **Access patterns:**
@@ -112,7 +112,7 @@ class BookService:
 
 if __name__ == "__main__":
     server = AsyncIOServer()
-    asyncio.run(server.run(BookService(), port=50051))
+    asyncio.run(server.run(BookService()))  # Default port is 50051
 ```
 
 ```python
@@ -349,7 +349,7 @@ if __name__ == "__main__":
     
     # Run gRPC server
     server = AsyncIOServer()
-    asyncio.run(server.run(service, port=50051))
+    asyncio.run(server.run(service))  # Default port is 50051
 ```
 
 Then use grpc-gateway to expose HTTP endpoints:

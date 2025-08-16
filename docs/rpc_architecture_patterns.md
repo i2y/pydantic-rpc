@@ -53,7 +53,7 @@ class RecommendationService:
 # Deploy as a Kubernetes service
 if __name__ == "__main__":
     server = AsyncIOServer()
-    asyncio.run(server.run(RecommendationService(), port=50051))
+    asyncio.run(server.run(RecommendationService()))  # Default port is 50051
 ```
 
 **Deployment:**
