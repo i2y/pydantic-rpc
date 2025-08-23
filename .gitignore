@@ -23,6 +23,10 @@ tests/**/*.pyi
 !tests/**/test_*.py
 .coverage
 
+# TLS test certificates (keep .crt files for tests, ignore private keys in production)
+tests/certs/*.key
+tests/certs/*.srl
+
 # Generated protobuf and connecpy files
 examples/*_pb2.py
 examples/*_pb2_grpc.py

@@ -14,6 +14,11 @@ from .decorators import (
     get_method_options,
     has_http_option,
 )
+from .tls import (
+    GrpcTLSConfig,
+    extract_peer_identity,
+    extract_peer_certificate_chain,
+)
 
 __all__ = [
     "Server",
@@ -26,6 +31,9 @@ __all__ = [
     "proto_option",
     "get_method_options",
     "has_http_option",
+    "GrpcTLSConfig",
+    "extract_peer_identity",
+    "extract_peer_certificate_chain",
 ]
 
 # Optional MCP support
