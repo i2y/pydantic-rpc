@@ -23,9 +23,9 @@ tests/**/*.pyi
 !tests/**/test_*.py
 .coverage
 
-# TLS test certificates (keep .crt files for tests, ignore private keys in production)
-tests/certs/*.key
-tests/certs/*.srl
+# Note: These are test-only certificates, never use in production.
+# tests/certs/*.key  # Commented out to allow test keys in repo
+# tests/certs/*.srl  # Commented out to allow serial files in repo
 
 # Generated protobuf and connecpy files
 examples/*_pb2.py
