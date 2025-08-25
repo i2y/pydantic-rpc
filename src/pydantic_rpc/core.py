@@ -15,6 +15,7 @@ from pathlib import Path
 from posixpath import basename
 from typing import (
     Any,
+    Optional,
     TypeAlias,
     get_args,
     get_origin,
@@ -36,6 +37,7 @@ from grpc_reflection.v1alpha import reflection
 from grpc_tools import protoc
 from pydantic import BaseModel, ValidationError
 from .decorators import get_method_options, has_http_option
+from .tls import GrpcTLSConfig
 
 ###############################################################################
 # 1. Message definitions & converter extensions
@@ -2602,13 +2604,19 @@ def generate_combined_descriptor_set(
 class Server:
     """A simple gRPC server that uses ThreadPoolExecutor for concurrency."""
 
-    def __init__(self, max_workers: int = 8, *interceptors: Any) -> None:
+    def __init__(
+        self,
+        max_workers: int = 8,
+        *interceptors: Any,
+        tls: Optional["GrpcTLSConfig"] = None,
+    ) -> None:
         self._server: grpc.Server = grpc.server(
             futures.ThreadPoolExecutor(max_workers), interceptors=interceptors
         )
         self._service_names: list[str] = []
         self._package_name: str = ""
         self._port: int = 50051
+        self._tls_config = tls
 
     def set_package_name(self, package_name: str):
         """Set the package name for .proto generation."""
@@ -2658,7 +2666,16 @@ class Server:
         health_pb2_grpc.add_HealthServicer_to_server(health_servicer, self._server)
         reflection.enable_server_reflection(SERVICE_NAMES, self._server)
 
-        self._server.add_insecure_port(f"[::]:{self._port}")
+        if self._tls_config:
+            # Use secure port with TLS
+            credentials = self._tls_config.to_server_credentials()
+            self._server.add_secure_port(f"[::]:{self._port}", credentials)
+            print(f"gRPC server starting with TLS on port {self._port}...")
+        else:
+            # Use insecure port
+            self._server.add_insecure_port(f"[::]:{self._port}")
+            print(f"gRPC server starting on port {self._port}...")
+
         self._server.start()
 
         def handle_signal(signum: signal.Signals, frame: Any):
@@ -2680,11 +2697,16 @@ class Server:
 class AsyncIOServer:
     """An async gRPC server using asyncio."""
 
-    def __init__(self, *interceptors: grpc.ServerInterceptor) -> None:
+    def __init__(
+        self,
+        *interceptors: grpc.ServerInterceptor,
+        tls: Optional["GrpcTLSConfig"] = None,
+    ) -> None:
         self._server: grpc.aio.Server = grpc.aio.server(interceptors=interceptors)
         self._service_names: list[str] = []
         self._package_name: str = ""
         self._port: int = 50051
+        self._tls_config = tls
 
     def set_package_name(self, package_name: str):
         """Set the package name for .proto generation."""
@@ -2736,7 +2758,16 @@ class AsyncIOServer:
         health_pb2_grpc.add_HealthServicer_to_server(health_servicer, self._server)
         reflection.enable_server_reflection(SERVICE_NAMES, self._server)
 
-        _ = self._server.add_insecure_port(f"[::]:{self._port}")
+        if self._tls_config:
+            # Use secure port with TLS
+            credentials = self._tls_config.to_server_credentials()
+            _ = self._server.add_secure_port(f"[::]:{self._port}", credentials)
+            print(f"gRPC server starting with TLS on port {self._port}...")
+        else:
+            # Use insecure port
+            _ = self._server.add_insecure_port(f"[::]:{self._port}")
+            print(f"gRPC server starting on port {self._port}...")
+
         await self._server.start()
 
         shutdown_event = asyncio.Event()

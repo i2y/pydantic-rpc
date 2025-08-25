@@ -39,6 +39,11 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
+      - name: Generate TLS test certificates
+        run: |
+          cd tests/certs
+          bash generate_certs.sh
+
       - name: Run tests
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"

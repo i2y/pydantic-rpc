@@ -884,8 +884,43 @@ class GoodMessage(Message):
 - Test error cases thoroughly
 - Be aware that errors fail silently
 
+### 🔒 TLS/mTLS Support
+
+PydanticRPC provides built-in support for TLS (Transport Layer Security) and mTLS (mutual TLS) for secure gRPC communication.
+
+```python
+from pydantic_rpc import AsyncIOServer, GrpcTLSConfig, extract_peer_identity
+import grpc
+
+# Basic TLS (server authentication only)
+tls_config = GrpcTLSConfig(
+    cert_chain=server_cert_bytes,
+    private_key=server_key_bytes,
+    require_client_cert=False
+)
+
+# mTLS (mutual authentication)
+tls_config = GrpcTLSConfig(
+    cert_chain=server_cert_bytes,
+    private_key=server_key_bytes,
+    root_certs=ca_cert_bytes,  # CA to verify client certificates
+    require_client_cert=True
+)
+
+# Create server with TLS
+server = AsyncIOServer(tls=tls_config)
+
+# Extract client identity in service methods
+class SecureService:
+    async def secure_method(self, request, context: grpc.ServicerContext):
+        client_identity = extract_peer_identity(context)
+        if client_identity:
+            print(f"Authenticated client: {client_identity}")
+```
+
+For a complete example, see [examples/tls_server.py](examples/tls_server.py) and [examples/tls_client.py](examples/tls_client.py).
+
 ### 🔗 Multiple Services with Custom Interceptors
->>>>>>> origin/main
 
 PydanticRPC supports defining and running multiple gRPC services in a single server:
 
