@@ -1,12 +1,15 @@
 """Decorators for adding protobuf options to RPC methods."""
 
-from typing import Any, Callable, Dict, List, Optional, TypeVar
+from typing import Any, Callable, Dict, List, Optional, TypeVar, Type
 from functools import wraps
+import grpc
+from connecpy.code import Code as ConnectErrors
 
 from .options import OptionMetadata, OPTION_METADATA_ATTR
 
 
 F = TypeVar("F", bound=Callable[..., Any])
+ERROR_HANDLER_ATTR = "__pydantic_rpc_error_handlers__"
 
 
 def http_option(
@@ -136,3 +139,71 @@ def has_proto_options(method: Callable) -> bool:
     """
     metadata = get_method_options(method)
     return metadata is not None and len(metadata.proto_options) > 0
+
+
+def error_handler(
+    exception_type: Type[Exception],
+    status_code: Optional[grpc.StatusCode] = None,
+    connect_code: Optional[ConnectErrors] = None,
+    handler: Optional[Callable[[Exception], tuple[str, Any]]] = None,
+) -> Callable[[F], F]:
+    """
+    Decorator to add automatic error handling to an RPC method.
+
+    Args:
+        exception_type: The type of exception to handle
+        status_code: The gRPC status code to return (for gRPC services)
+        connect_code: The Connect error code to return (for Connect services)
+        handler: Optional custom handler function that returns (message, details)
+
+    Example:
+        @error_handler(ValidationError, status_code=grpc.StatusCode.INVALID_ARGUMENT)
+        @error_handler(KeyError, status_code=grpc.StatusCode.NOT_FOUND)
+        async def get_user(self, request: GetUserRequest) -> User:
+            ...
+    """
+
+    def decorator(func: F) -> F:
+        # Get or create error handlers list
+        if not hasattr(func, ERROR_HANDLER_ATTR):
+            setattr(func, ERROR_HANDLER_ATTR, [])
+
+        handlers = getattr(func, ERROR_HANDLER_ATTR)
+
+        # Add this handler to the list
+        handlers.append(
+            {
+                "exception_type": exception_type,
+                "status_code": status_code or grpc.StatusCode.INTERNAL,
+                "connect_code": connect_code or ConnectErrors.INTERNAL,
+                "handler": handler,
+            }
+        )
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            return func(*args, **kwargs)
+
+        # Preserve the error handlers on the wrapper
+        setattr(wrapper, ERROR_HANDLER_ATTR, handlers)
+
+        # Preserve any existing option metadata
+        if hasattr(func, OPTION_METADATA_ATTR):
+            setattr(wrapper, OPTION_METADATA_ATTR, getattr(func, OPTION_METADATA_ATTR))
+
+        return wrapper  # type: ignore
+
+    return decorator
+
+
+def get_error_handlers(method: Callable) -> Optional[List[Dict[str, Any]]]:
+    """
+    Get error handlers from a method.
+
+    Args:
+        method: The method to get error handlers from
+
+    Returns:
+        List of error handler configurations if present, None otherwise
+    """
+    return getattr(method, ERROR_HANDLER_ATTR, None)

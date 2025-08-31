@@ -13,6 +13,8 @@ from .decorators import (
     proto_option,
     get_method_options,
     has_http_option,
+    error_handler,
+    get_error_handlers,
 )
 from .tls import (
     GrpcTLSConfig,
@@ -31,6 +33,8 @@ __all__ = [
     "proto_option",
     "get_method_options",
     "has_http_option",
+    "error_handler",
+    "get_error_handlers",
     "GrpcTLSConfig",
     "extract_peer_identity",
     "extract_peer_certificate_chain",
