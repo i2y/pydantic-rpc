@@ -89,10 +89,10 @@ if __name__ == "__main__":
 
     print("Starting Connecpy streaming service on http://localhost:8000")
     print("\nAvailable endpoints:")
-    print("  POST /chat.v1.ChatService/send_message       - Unary RPC")
-    print("  POST /chat.v1.ChatService/stream_updates     - Server streaming")
-    print("  POST /chat.v1.ChatService/batch_send         - Client streaming")
-    print("  POST /chat.v1.ChatService/chat_session       - Bidirectional streaming")
+    print("  POST /chat.v1.ChatService/SendMessage       - Unary RPC")
+    print("  POST /chat.v1.ChatService/StreamUpdates     - Server streaming")
+    print("  POST /chat.v1.ChatService/BatchSend         - Client streaming")
+    print("  POST /chat.v1.ChatService/ChatSession       - Bidirectional streaming")
     print("\nUse a Connect RPC client to interact with these endpoints.")
 
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -113,6 +113,17 @@ app = ASGIApp(service=OlympicsLocationAgent())
 - 🛠️ **Pre-generated Protobuf Files and Code:** Pre-generate proto files and corresponding code via the CLI. By setting the environment variable (PYDANTIC_RPC_SKIP_GENERATION), you can skip runtime generation.
 - 🤖 **MCP (Model Context Protocol) Support:** Expose your services as tools for AI assistants using the official MCP SDK, supporting both stdio and HTTP/SSE transports.
 
+## ⚠️ Important Notes for Connect-RPC
+
+When using Connect-RPC with ASGIApp:
+
+- **Endpoint Path Format**: Connect-RPC endpoints use CamelCase method names in the path: `/<package>.<service>/<Method>` (e.g., `/chat.v1.ChatService/SendMessage`)
+- **Content-Type**: Set `Content-Type: application/json` or `application/connect+json` for requests
+- **HTTP/2 Requirement**: Bidirectional streaming requires HTTP/2. Use Hypercorn instead of uvicorn for HTTP/2 support
+- **Testing**: Use [buf curl](https://buf.build/docs/ecosystem/cli/curl) for testing Connect-RPC endpoints with proper streaming support
+
+For detailed examples and testing instructions, see the [examples directory](examples/).
+
 ## 📦 Installation
 
 Install PydanticRPC via pip:

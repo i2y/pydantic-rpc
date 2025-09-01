@@ -215,8 +215,33 @@ def run_grpc_server():
         print("Starting gRPC server on port 50051...")
         server = AsyncIOServer()
         service = InternalGRPCService(processor)
-        # Run without signal handling in thread
-        await server.run(service, handle_signals=False)  # Default port is 50051
+
+        # Mount the service
+        server.mount(service)
+
+        # Add health and reflection services
+        from grpc_health.v1 import health_pb2, health_pb2_grpc
+        from grpc_reflection.v1alpha import reflection
+        from pydantic_rpc.core import HealthServicer
+
+        SERVICE_NAMES = (
+            health_pb2.DESCRIPTOR.services_by_name["Health"].full_name,
+            reflection.SERVICE_NAME,
+            *server._service_names,
+        )
+        health_servicer = HealthServicer()
+        health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server._server)
+        reflection.enable_server_reflection(SERVICE_NAMES, server._server)
+
+        # Bind to port
+        server._server.add_insecure_port(f"[::]:{server._port}")
+
+        # Start the server
+        await server._server.start()
+        print("gRPC server is running on port 50051...")
+
+        # Keep the server running
+        await asyncio.Event().wait()
 
     # Create new event loop for this thread
     loop = asyncio.new_event_loop()
