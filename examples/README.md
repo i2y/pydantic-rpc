@@ -301,7 +301,7 @@ EOF
 
 ### Content-Type Requirements
 - Use `Content-Type: application/json` for JSON payloads
-- Alternative: `Content-Type: application/connect+json` for Connect protocol
+- Use `Content-Type: application/connect+json` for streaming RPCs with Connect protocol
 
 ### HTTP/2 Requirements
 - **Bidirectional streaming** requires HTTP/2
