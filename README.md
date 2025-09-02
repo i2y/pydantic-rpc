@@ -45,9 +45,10 @@ class OlympicsLocationAgent:
 
 
 if __name__ == "__main__":
-    s = AsyncIOServer()
+    # New enhanced initialization API (optional - backward compatible)
+    s = AsyncIOServer(service=OlympicsLocationAgent(), port=50051)
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(s.run(OlympicsLocationAgent()))
+    loop.run_until_complete(s.run())
 ```
 
 And here is an example of a simple Connect RPC service that exposes the same agent as an ASGI application:
@@ -89,8 +90,8 @@ class OlympicsLocationAgent:
         result = await self._agent.run(req.prompt())
         return result.data
 
-app = ASGIApp()
-app.mount(OlympicsLocationAgent())
+# New enhanced initialization API (optional - backward compatible)
+app = ASGIApp(service=OlympicsLocationAgent())
 
 ```
 
@@ -112,12 +113,71 @@ app.mount(OlympicsLocationAgent())
 - 🛠️ **Pre-generated Protobuf Files and Code:** Pre-generate proto files and corresponding code via the CLI. By setting the environment variable (PYDANTIC_RPC_SKIP_GENERATION), you can skip runtime generation.
 - 🤖 **MCP (Model Context Protocol) Support:** Expose your services as tools for AI assistants using the official MCP SDK, supporting both stdio and HTTP/SSE transports.
 
+## ⚠️ Important Notes for Connect-RPC
+
+When using Connect-RPC with ASGIApp:
+
+- **Endpoint Path Format**: Connect-RPC endpoints use CamelCase method names in the path: `/<package>.<service>/<Method>` (e.g., `/chat.v1.ChatService/SendMessage`)
+- **Content-Type**: Set `Content-Type: application/json` or `application/connect+json` for requests
+- **HTTP/2 Requirement**: Bidirectional streaming requires HTTP/2. Use Hypercorn instead of uvicorn for HTTP/2 support
+- **Testing**: Use [buf curl](https://buf.build/docs/ecosystem/cli/curl) for testing Connect-RPC endpoints with proper streaming support
+
+For detailed examples and testing instructions, see the [examples directory](examples/).
+
 ## 📦 Installation
 
 Install PydanticRPC via pip:
 
 ```bash
 pip install pydantic-rpc
+```
+
+For CLI support with built-in server runners:
+
+```bash
+pip install pydantic-rpc-cli  # Includes hypercorn and gunicorn
+```
+
+## 🆕 Enhanced Features (v0.10.0+)
+
+**Note: All new features are fully backward compatible. Existing code continues to work without modification.**
+
+### Enhanced Initialization API
+All server classes now support optional initialization with services:
+
+```python
+# Traditional API (still works)
+server = AsyncIOServer()
+server.set_port(50051)
+await server.run(MyService())
+
+# New enhanced API (optional)
+server = AsyncIOServer(
+    service=MyService(),
+    port=50051,
+    package_name="my.package"
+)
+await server.run()
+
+# Same for ASGI/WSGI apps
+app = ASGIApp(service=MyService(), package_name="my.package")
+```
+
+### Error Handling with Decorators
+Automatically map exceptions to gRPC/Connect status codes:
+
+```python
+from pydantic_rpc import error_handler
+import grpc
+
+class MyService:
+    @error_handler(ValidationError, status_code=grpc.StatusCode.INVALID_ARGUMENT)
+    @error_handler(KeyError, status_code=grpc.StatusCode.NOT_FOUND)
+    async def get_user(self, request: GetUserRequest) -> User:
+        # Exceptions are automatically converted to proper status codes
+        if request.id not in users_db:
+            raise KeyError(f"User {request.id} not found")
+        return users_db[request.id]
 ```
 
 ## 🚀 Getting Started
@@ -1073,15 +1133,40 @@ MCP endpoints will be available at:
 - SSE: `GET http://localhost:8000/mcp/sse`
 - Messages: `POST http://localhost:8000/mcp/messages/`
 
-### 🗄️ Protobuf file and code (Python files) generation using CLI
+### 🗄️ CLI Tool (pydantic-rpc-cli)
 
-You can genereate protobuf files and code for a given module and a specified class using `pydantic-rpc` CLI command:
+The CLI tool provides powerful features for generating protobuf files and running servers. Install it separately:
 
 ```bash
-pydantic-rpc a_module.py aClassName
+pip install pydantic-rpc-cli
 ```
 
-Using this generated proto file and tools as `protoc`, `buf` and `BSR`, you could generate code for any desired language other than Python.
+#### Generate Protobuf Files
+
+```bash
+# Generate .proto file from a service class
+pydantic-rpc generate myapp.services.UserService --output ./proto/
+
+# Also compile to Python code
+pydantic-rpc generate myapp.services.UserService --compile
+```
+
+#### Run Servers Directly
+
+The CLI can run any type of server:
+
+```bash
+# Run as gRPC server (auto-detects async/sync)
+pydantic-rpc serve myapp.services.UserService --port 50051
+
+# Run as Connect-RPC with ASGI (HTTP/2, uses Hypercorn)
+pydantic-rpc serve myapp.services.UserService --asgi --port 8000
+
+# Run as Connect-RPC with WSGI (HTTP/1.1, uses Gunicorn)
+pydantic-rpc serve myapp.services.UserService --wsgi --port 8000 --workers 4
+```
+
+Using the generated proto files with tools like `protoc`, `buf` and `BSR`, you can generate code for any desired language.
 
 
 ## 📖 Data Type Mapping

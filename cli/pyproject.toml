@@ -1,0 +1,25 @@
+[project]
+name = "pydantic-rpc-cli"
+version = "0.10.0"
+description = "CLI tool for pydantic-rpc with server runtime support"
+authors = [
+    { name = "Yasushi Itoh" }
+]
+dependencies = [
+    "pydantic-rpc>=0.10.0",
+    "hypercorn>=0.17.3",
+    "gunicorn>=20.1.0",
+    "uvloop>=0.17.0",  # Optional performance improvement for asyncio
+]
+readme = "README.md"
+requires-python = ">= 3.11"
+
+[project.scripts]
+pydantic-rpc = "pydantic_rpc_cli.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.7.21,<0.8.0"]
+build-backend = "uv_build"
+
+[tool.uv]
+managed = true

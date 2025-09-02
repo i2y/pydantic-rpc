@@ -27,7 +27,7 @@ async def main():
     client = greeter_connecpy.GreeterClient(server_url)
 
     try:
-        response = await client.SayHello(
+        response = await client.say_hello(
             request=greeter_pb2.HelloRequest(name="World"),
             timeout_ms=timeout_ms,
         )

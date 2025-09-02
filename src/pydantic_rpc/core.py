@@ -2606,6 +2606,9 @@ class Server:
 
     def __init__(
         self,
+        service: Optional[object] = None,
+        port: int = 50051,
+        package_name: str = "",
         max_workers: int = 8,
         *interceptors: Any,
         tls: Optional["GrpcTLSConfig"] = None,
@@ -2614,9 +2617,10 @@ class Server:
             futures.ThreadPoolExecutor(max_workers), interceptors=interceptors
         )
         self._service_names: list[str] = []
-        self._package_name: str = ""
-        self._port: int = 50051
+        self._package_name: str = package_name
+        self._port: int = port
         self._tls_config = tls
+        self._initial_service = service
 
     def set_package_name(self, package_name: str):
         """Set the package name for .proto generation."""
@@ -2654,6 +2658,11 @@ class Server:
         Mount multiple services and run the gRPC server with reflection and health check.
         Press Ctrl+C or send SIGTERM to stop.
         """
+        # Mount initial service if provided
+        if self._initial_service:
+            self.mount(self._initial_service, self._package_name)
+
+        # Mount additional services
         for obj in objs:
             self.mount(obj, self._package_name)
 
@@ -2699,14 +2708,18 @@ class AsyncIOServer:
 
     def __init__(
         self,
+        service: Optional[object] = None,
+        port: int = 50051,
+        package_name: str = "",
         *interceptors: grpc.ServerInterceptor,
         tls: Optional["GrpcTLSConfig"] = None,
     ) -> None:
         self._server: grpc.aio.Server = grpc.aio.server(interceptors=interceptors)
         self._service_names: list[str] = []
-        self._package_name: str = ""
-        self._port: int = 50051
+        self._package_name: str = package_name
+        self._port: int = port
         self._tls_config = tls
+        self._initial_service = service
 
     def set_package_name(self, package_name: str):
         """Set the package name for .proto generation."""
@@ -2746,6 +2759,11 @@ class AsyncIOServer:
         Mount multiple async services and run the gRPC server with reflection and health check.
         Press Ctrl+C or send SIGTERM to stop.
         """
+        # Mount initial service if provided
+        if self._initial_service:
+            self.mount(self._initial_service, self._package_name)
+
+        # Mount additional services
         for obj in objs:
             self.mount(obj, self._package_name)
 
@@ -2802,10 +2820,11 @@ class ASGIApp:
     An ASGI-compatible application that can serve Connect-RPC via Connecpy.
     """
 
-    def __init__(self):
+    def __init__(self, service: Optional[object] = None, package_name: str = ""):
         self._services: list[tuple[Any, str]] = []  # List of (app, path) tuples
         self._service_names: list[str] = []
-        self._package_name: str = ""
+        self._package_name: str = package_name
+        self._initial_service = service
 
     def mount(self, obj: object, package_name: str = ""):
         """Generate and compile proto files, then mount the async service implementation."""
@@ -2838,6 +2857,11 @@ class ASGIApp:
 
     def mount_objs(self, *objs: object):
         """Mount multiple service objects into this ASGI app."""
+        # Mount initial service if provided
+        if self._initial_service:
+            self.mount(self._initial_service, self._package_name)
+
+        # Mount additional services
         for obj in objs:
             self.mount(obj, self._package_name)
 
@@ -2848,6 +2872,10 @@ class ASGIApp:
         send: Callable[[dict[str, Any]], Any],
     ):
         """ASGI entry point with routing for multiple services."""
+        # Mount initial service on first call if not already mounted
+        if self._initial_service and not self._services:
+            self.mount(self._initial_service, self._package_name)
+
         if scope["type"] != "http":
             await send({"type": "http.response.start", "status": 404})
             await send({"type": "http.response.body", "body": b"Not Found"})
@@ -2874,10 +2902,11 @@ class WSGIApp:
     A WSGI-compatible application that can serve Connect-RPC via Connecpy.
     """
 
-    def __init__(self):
+    def __init__(self, service: Optional[object] = None, package_name: str = ""):
         self._services: list[tuple[Any, str]] = []  # List of (app, path) tuples
         self._service_names: list[str] = []
-        self._package_name: str = ""
+        self._package_name: str = package_name
+        self._initial_service = service
 
     def mount(self, obj: object, package_name: str = ""):
         """Generate and compile proto files, then mount the sync service implementation."""
@@ -2910,6 +2939,11 @@ class WSGIApp:
 
     def mount_objs(self, *objs: object):
         """Mount multiple service objects into this WSGI app."""
+        # Mount initial service if provided
+        if self._initial_service:
+            self.mount(self._initial_service, self._package_name)
+
+        # Mount additional services
         for obj in objs:
             self.mount(obj, self._package_name)
 
@@ -2921,6 +2955,10 @@ class WSGIApp:
         ],
     ) -> Iterable[bytes]:
         """WSGI entry point with routing for multiple services."""
+        # Mount initial service on first call if not already mounted
+        if self._initial_service and not self._services:
+            self.mount(self._initial_service, self._package_name)
+
         path = environ.get("PATH_INFO", "")
 
         # Route to the appropriate service based on path
