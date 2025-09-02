@@ -1,6 +1,6 @@
 [project]
 name = "pydantic-rpc-cli"
-version = "0.10.0"
+version = "0.11.0"
 description = "CLI tool for pydantic-rpc with server runtime support"
 authors = [
     { name = "Yasushi Itoh" }
