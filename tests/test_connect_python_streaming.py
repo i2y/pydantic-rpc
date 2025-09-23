@@ -1,4 +1,4 @@
-"""Tests for Connecpy streaming RPC support."""
+"""Tests for Connect Python streaming RPC support."""
 
 import pytest
 from typing import AsyncIterator
@@ -54,10 +54,10 @@ class StreamingService:
 
 @pytest.mark.skipif(
     should_skip_connecpy_tests(),
-    reason="Skipping connecpy tests because connecpy is not installed",
+    reason="Skipping connect-python tests because connect-python is not installed",
 )
 @pytest.mark.asyncio
-async def test_connecpy_server_streaming():
+async def test_connect_python_server_streaming():
     """Test server streaming RPC with ASGIApp."""
     app = ASGIApp()
     service = StreamingService()
@@ -72,10 +72,10 @@ async def test_connecpy_server_streaming():
 
 @pytest.mark.skipif(
     should_skip_connecpy_tests(),
-    reason="Skipping connecpy tests because connecpy is not installed",
+    reason="Skipping connect-python tests because connect-python is not installed",
 )
 @pytest.mark.asyncio
-async def test_connecpy_client_streaming():
+async def test_connect_python_client_streaming():
     """Test client streaming RPC with ASGIApp."""
     app = ASGIApp()
     service = StreamingService()
@@ -88,10 +88,10 @@ async def test_connecpy_client_streaming():
 
 @pytest.mark.skipif(
     should_skip_connecpy_tests(),
-    reason="Skipping connecpy tests because connecpy is not installed",
+    reason="Skipping connect-python tests because connect-python is not installed",
 )
 @pytest.mark.asyncio
-async def test_connecpy_bidi_streaming():
+async def test_connect_python_bidi_streaming():
     """Test bidirectional streaming RPC with ASGIApp."""
     app = ASGIApp()
     service = StreamingService()
@@ -104,7 +104,7 @@ async def test_connecpy_bidi_streaming():
 
 @pytest.mark.skipif(
     should_skip_connecpy_tests(),
-    reason="Skipping connecpy tests because connecpy is not installed",
+    reason="Skipping connect-python tests because connect-python is not installed",
 )
 @pytest.mark.asyncio
 async def test_mixed_streaming_service():

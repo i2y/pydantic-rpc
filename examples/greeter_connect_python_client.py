@@ -13,9 +13,9 @@
 # if __name__ == "__main__":
 #     run()
 
-from connecpy.exceptions import ConnecpyException
+from connectrpc.exceptions import ConnectException
 
-import greeter_connecpy
+import greeter_connect
 import greeter_pb2
 
 
@@ -24,7 +24,7 @@ timeout_ms = 5000  # Changed to milliseconds
 
 
 async def main():
-    client = greeter_connecpy.GreeterClient(server_url)
+    client = greeter_connect.GreeterClient(server_url)
 
     try:
         response = await client.say_hello(
@@ -32,7 +32,7 @@ async def main():
             timeout_ms=timeout_ms,
         )
         print(response)
-    except ConnecpyException as e:
+    except ConnectException as e:
         print(e.code, e.message, e.to_dict())
 
 

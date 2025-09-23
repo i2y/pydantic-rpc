@@ -122,7 +122,7 @@ class StreamStreamService:
 
 @pytest.mark.skipif(
     should_skip_connecpy_tests(),
-    reason="Skipping connecpy tests because connecpy is not installed",
+    reason="Skipping connect-python tests because connect-python is not installed",
 )
 @pytest.mark.asyncio
 async def test_asgi():
@@ -167,7 +167,7 @@ async def test_asgi():
 
 @pytest.mark.skipif(
     should_skip_connecpy_tests(),
-    reason="Skipping connecpy tests because connecpy is not installed",
+    reason="Skipping connect-python tests because connect-python is not installed",
 )
 def test_wsgi():
     app = WSGIApp()

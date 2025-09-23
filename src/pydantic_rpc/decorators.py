@@ -3,7 +3,7 @@
 from typing import Any, Callable, Dict, List, Optional, TypeVar, Type
 from functools import wraps
 import grpc
-from connecpy.code import Code as ConnectErrors
+from connectrpc.code import Code as ConnectErrors
 
 from .options import OptionMetadata, OPTION_METADATA_ATTR
 

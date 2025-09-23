@@ -1,7 +1,7 @@
 """Connect-RPC example with nested Message serializers."""
 
 from pydantic import field_serializer
-from pydantic_rpc import ConnecpyASGIApp, Message
+from pydantic_rpc import ASGIApp, Message
 
 
 class Address(Message):
@@ -72,7 +72,7 @@ class NestedService:
 
 
 # Create ASGI app
-app = ConnecpyASGIApp()
+app = ASGIApp()
 app.mount(NestedService())
 
 if __name__ == "__main__":

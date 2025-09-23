@@ -27,7 +27,7 @@ import annotated_types
 import grpc
 from grpc import ServicerContext
 import grpc_tools
-from connecpy.code import Code as Errors
+from connectrpc.code import Code as Errors
 
 # Protobuf Python modules for Timestamp, Duration (requires protobuf / grpcio)
 from google.protobuf import duration_pb2, timestamp_pb2, empty_pb2
@@ -726,15 +726,15 @@ def connect_obj_with_stub_async(
     return ConcreteServiceClass
 
 
-def connect_obj_with_stub_connecpy(
-    connecpy_module: Any, pb2_module: Any, obj: object
+def connect_obj_with_stub_connect_python(
+    connect_python_module: Any, pb2_module: Any, obj: object
 ) -> type:
     """
-    Connect a Python service object to a Connecpy stub.
+    Connect a Python service object to a Connect Python stub.
     """
     service_class = obj.__class__
     stub_class_name = service_class.__name__
-    stub_class = getattr(connecpy_module, stub_class_name)
+    stub_class = getattr(connect_python_module, stub_class_name)
 
     class ConcreteServiceClass(stub_class):
         pass
@@ -845,15 +845,15 @@ def connect_obj_with_stub_connecpy(
     return ConcreteServiceClass
 
 
-def connect_obj_with_stub_async_connecpy(
-    connecpy_module: Any, pb2_module: Any, obj: object
+def connect_obj_with_stub_async_connect_python(
+    connect_python_module: Any, pb2_module: Any, obj: object
 ) -> type:
     """
-    Connect a Python service object to a Connecpy stub for async methods with streaming support.
+    Connect a Python service object to a Connect Python stub for async methods with streaming support.
     """
     service_class = obj.__class__
     stub_class_name = service_class.__name__
-    stub_class = getattr(connecpy_module, stub_class_name)
+    stub_class = getattr(connect_python_module, stub_class_name)
 
     class ConcreteServiceClass(stub_class):
         pass
@@ -2030,10 +2030,10 @@ def generate_grpc_code(proto_path: Path) -> types.ModuleType | None:
     return module
 
 
-def generate_connecpy_code(proto_path: Path) -> types.ModuleType | None:
+def generate_connect_python_code(proto_path: Path) -> types.ModuleType | None:
     """
-    Run protoc with the Connecpy plugin to generate Python Connecpy code from proto_path.
-    Writes foo_connecpy.py next to proto_path, then imports and returns that module.
+    Run protoc with the Connect Python plugin to generate Python Connect code from proto_path.
+    Writes foo_connect_python.py next to proto_path, then imports and returns that module.
     """
     # 1) Ensure the .proto exists
     if not proto_path.is_file():
@@ -2051,7 +2051,7 @@ def generate_connecpy_code(proto_path: Path) -> types.ModuleType | None:
         "protoc",  # Dummy program name (required for protoc.main)
         "-I.",
         f"-I{well_known_path}",
-        f"--connecpy_out={out_str}",
+        f"--connect-python_out={out_str}",
         proto_path.name,
     ]
 
@@ -2065,7 +2065,7 @@ def generate_connecpy_code(proto_path: Path) -> types.ModuleType | None:
 
     # 4) Locate the generated file
     base_name = proto_path.stem  # "foo"
-    generated_filename = f"{base_name}_connecpy.py"  # "foo_connecpy.py"
+    generated_filename = f"{base_name}_connect.py"  # "foo_connect.py"
     generated_filepath = out_dir / generated_filename
 
     # 5) Add out_dir to sys.path so we can import by filename
@@ -2074,7 +2074,7 @@ def generate_connecpy_code(proto_path: Path) -> types.ModuleType | None:
 
     # 6) Load and return the module
     spec = importlib.util.spec_from_file_location(
-        base_name + "_connecpy", str(generated_filepath)
+        base_name + "_connect", str(generated_filepath)
     )
     if spec is None or spec.loader is None:
         return None
@@ -2259,7 +2259,7 @@ def get_proto_path(proto_filename: str) -> Path:
     return base / proto_filename
 
 
-def generate_and_compile_proto_using_connecpy(
+def generate_and_compile_proto_using_connect_python(
     obj: object,
     package_name: str = "",
     existing_proto_path: Path | None = None,
@@ -2268,7 +2268,7 @@ def generate_and_compile_proto_using_connecpy(
         import importlib
 
         pb2_module = None
-        connecpy_module = None
+        connect_python_module = None
 
         try:
             pb2_module = importlib.import_module(
@@ -2278,14 +2278,14 @@ def generate_and_compile_proto_using_connecpy(
             pass
 
         try:
-            connecpy_module = importlib.import_module(
-                f"{obj.__class__.__name__.lower()}_connecpy"
+            connect_python_module = importlib.import_module(
+                f"{obj.__class__.__name__.lower()}_connect"
             )
         except ImportError:
             pass
 
-        if connecpy_module is not None and pb2_module is not None:
-            return connecpy_module, pb2_module
+        if connect_python_module is not None and pb2_module is not None:
+            return connect_python_module, pb2_module
 
         # If the modules are not found, generate and compile the proto files.
 
@@ -2306,10 +2306,10 @@ def generate_and_compile_proto_using_connecpy(
     if gen_pb is None:
         raise Exception("Generating pb code")
 
-    gen_connecpy = generate_connecpy_code(proto_file_path)
-    if gen_connecpy is None:
-        raise Exception("Generating Connecpy code")
-    return gen_connecpy, gen_pb
+    gen_connect_python = generate_connect_python_code(proto_file_path)
+    if gen_connect_python is None:
+        raise Exception("Generating Connect Python code")
+    return gen_connect_python, gen_pb
 
 
 def is_combined_proto_enabled() -> bool:
@@ -2804,20 +2804,24 @@ class AsyncIOServer:
         await self._server.stop(10)
         print("gRPC server shutdown.")
 
+    async def stop(self, grace: float = 10.0):
+        """Stop the gRPC server gracefully."""
+        await self._server.stop(grace)
 
-def get_connecpy_asgi_app_class(connecpy_module: Any, service_name: str):
-    """Get the ASGI application class from connecpy module (Connecpy v2.x)."""
-    return getattr(connecpy_module, f"{service_name}ASGIApplication")
+
+def get_connect_python_asgi_app_class(connect_python_module: Any, service_name: str):
+    """Get the ASGI application class from connect-python module."""
+    return getattr(connect_python_module, f"{service_name}ASGIApplication")
 
 
-def get_connecpy_wsgi_app_class(connecpy_module: Any, service_name: str):
-    """Get the WSGI application class from connecpy module (Connecpy v2.x)."""
-    return getattr(connecpy_module, f"{service_name}WSGIApplication")
+def get_connect_python_wsgi_app_class(connect_python_module: Any, service_name: str):
+    """Get the WSGI application class from connect-python module."""
+    return getattr(connect_python_module, f"{service_name}WSGIApplication")
 
 
 class ASGIApp:
     """
-    An ASGI-compatible application that can serve Connect-RPC via Connecpy.
+    An ASGI-compatible application that can serve Connect-RPC via connect-python.
     """
 
     def __init__(self, service: Optional[object] = None, package_name: str = ""):
@@ -2828,23 +2832,25 @@ class ASGIApp:
 
     def mount(self, obj: object, package_name: str = ""):
         """Generate and compile proto files, then mount the async service implementation."""
-        connecpy_module, pb2_module = generate_and_compile_proto_using_connecpy(
-            obj, package_name
+        connect_python_module, pb2_module = (
+            generate_and_compile_proto_using_connect_python(obj, package_name)
         )
-        self.mount_using_pb2_modules(connecpy_module, pb2_module, obj)
+        self.mount_using_pb2_modules(connect_python_module, pb2_module, obj)
 
     def mount_using_pb2_modules(
-        self, connecpy_module: Any, pb2_module: Any, obj: object
+        self, connect_python_module: Any, pb2_module: Any, obj: object
     ):
-        """Connect the compiled connecpy and pb2 modules with the async service implementation."""
-        concreteServiceClass = connect_obj_with_stub_async_connecpy(
-            connecpy_module, pb2_module, obj
+        """Connect the compiled connect-python and pb2 modules with the async service implementation."""
+        concreteServiceClass = connect_obj_with_stub_async_connect_python(
+            connect_python_module, pb2_module, obj
         )
         service_name = obj.__class__.__name__
         service_impl = concreteServiceClass()
 
         # Get the service-specific ASGI application class
-        app_class = get_connecpy_asgi_app_class(connecpy_module, service_name)
+        app_class = get_connect_python_asgi_app_class(
+            connect_python_module, service_name
+        )
         app = app_class(service=service_impl)
 
         # Store the app and its path for routing
@@ -2899,7 +2905,7 @@ class ASGIApp:
 
 class WSGIApp:
     """
-    A WSGI-compatible application that can serve Connect-RPC via Connecpy.
+    A WSGI-compatible application that can serve Connect-RPC via connect-python.
     """
 
     def __init__(self, service: Optional[object] = None, package_name: str = ""):
@@ -2910,23 +2916,25 @@ class WSGIApp:
 
     def mount(self, obj: object, package_name: str = ""):
         """Generate and compile proto files, then mount the sync service implementation."""
-        connecpy_module, pb2_module = generate_and_compile_proto_using_connecpy(
-            obj, package_name
+        connect_python_module, pb2_module = (
+            generate_and_compile_proto_using_connect_python(obj, package_name)
         )
-        self.mount_using_pb2_modules(connecpy_module, pb2_module, obj)
+        self.mount_using_pb2_modules(connect_python_module, pb2_module, obj)
 
     def mount_using_pb2_modules(
-        self, connecpy_module: Any, pb2_module: Any, obj: object
+        self, connect_python_module: Any, pb2_module: Any, obj: object
     ):
-        """Connect the compiled connecpy and pb2 modules with the sync service implementation."""
-        concreteServiceClass = connect_obj_with_stub_connecpy(
-            connecpy_module, pb2_module, obj
+        """Connect the compiled connect-python and pb2 modules with the sync service implementation."""
+        concreteServiceClass = connect_obj_with_stub_connect_python(
+            connect_python_module, pb2_module, obj
         )
         service_name = obj.__class__.__name__
         service_impl = concreteServiceClass()
 
         # Get the service-specific WSGI application class
-        app_class = get_connecpy_wsgi_app_class(connecpy_module, service_name)
+        app_class = get_connect_python_wsgi_app_class(
+            connect_python_module, service_name
+        )
         app = app_class(service=service_impl)
 
         # Store the app and its path for routing
