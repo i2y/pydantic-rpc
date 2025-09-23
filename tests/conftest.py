@@ -18,7 +18,7 @@ if tests_path not in sys.path:
 _temp_proto_dir = tempfile.mkdtemp()
 os.environ["PYDANTIC_RPC_PROTO_PATH"] = _temp_proto_dir
 
-# Add the Go bin directory to PATH for protoc-gen-connecpy
+# Add the Go bin directory to PATH for protoc-gen-connect-python
 go_bin = os.path.expanduser("~/go/bin")
 if os.path.exists(go_bin):
     os.environ["PATH"] = f"{go_bin}:{os.environ.get('PATH', '')}"
@@ -58,17 +58,21 @@ def unique_package_name(request: pytest.FixtureRequest) -> str:
 
 
 @lru_cache(maxsize=1)
-def should_skip_connecpy_tests() -> bool:
-    """Determine if connecpy tests should be skipped based on whether connecpy is installed."""
+def should_skip_connect_python_tests() -> bool:
+    """Determine if connect-python tests should be skipped based on whether connect-python is installed."""
     if os.getenv("CI"):
         return False
+
+    # Check if protoc-gen-connect-python is installed via pip
+    if shutil.which("protoc-gen-connect-python"):
+        return False  # Don't skip if installed via pip
 
     # Check if Go is installed
     go_path = shutil.which("go")
     if not go_path:
         return True  # Skip if Go is not installed
 
-    # Check if protoc-gen-connecpy is installed in Go bin
+    # Check if protoc-gen-connecpy is installed in Go bin (legacy)
     try:
         result = subprocess.run(
             ["go", "env", "GOPATH"],
@@ -78,13 +82,18 @@ def should_skip_connecpy_tests() -> bool:
             text=True,
         )
         gopath = result.stdout.strip()
+        # Check for legacy protoc-gen-connecpy
         connecpy_path = os.path.join(gopath, "bin", "protoc-gen-connecpy")
         if not os.path.exists(connecpy_path):
-            return True  # Skip if protoc-gen-connecpy is not installed
+            return True  # Skip if neither protoc plugin is installed
     except Exception:
         return True  # Skip if any error occurs
 
     return False  # Do not skip if all requirements are met
+
+
+# Add a compatibility alias for backward compatibility
+should_skip_connecpy_tests = should_skip_connect_python_tests
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: pytest.ExitCode) -> None:

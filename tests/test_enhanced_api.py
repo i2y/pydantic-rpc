@@ -15,14 +15,14 @@ from pydantic_rpc import (
 )
 
 
-class TestRequest(Message):
-    """Test request message."""
+class SampleRequest(Message):
+    """Sample request message."""
 
     value: str
 
 
-class TestResponse(Message):
-    """Test response message."""
+class SampleResponse(Message):
+    """Sample response message."""
 
     result: str
 
@@ -30,15 +30,15 @@ class TestResponse(Message):
 class TestService:
     """Test service for enhanced API testing."""
 
-    def echo(self, request: TestRequest) -> TestResponse:
-        return TestResponse(result=f"Echo: {request.value}")
+    def echo(self, request: SampleRequest) -> SampleResponse:
+        return SampleResponse(result=f"Echo: {request.value}")
 
 
 class AsyncTestService:
     """Async test service for enhanced API testing."""
 
-    async def echo(self, request: TestRequest) -> TestResponse:
-        return TestResponse(result=f"Echo: {request.value}")
+    async def echo(self, request: SampleRequest) -> SampleResponse:
+        return SampleResponse(result=f"Echo: {request.value}")
 
 
 def test_server_enhanced_init():
@@ -115,12 +115,12 @@ def test_error_handler_decorator():
     class ServiceWithErrorHandling:
         @error_handler(KeyError, status_code=grpc.StatusCode.NOT_FOUND)
         @error_handler(ValidationError, status_code=grpc.StatusCode.INVALID_ARGUMENT)
-        def get_item(self, request: TestRequest) -> TestResponse:
+        def get_item(self, request: SampleRequest) -> SampleResponse:
             if request.value == "missing":
                 raise KeyError("Item not found")
             if request.value == "invalid":
                 raise ValidationError("Invalid request")
-            return TestResponse(result=request.value)
+            return SampleResponse(result=request.value)
 
     service = ServiceWithErrorHandling()
 
@@ -150,7 +150,7 @@ def test_error_handler_with_custom_handler():
         @error_handler(
             RuntimeError, status_code=grpc.StatusCode.INTERNAL, handler=custom_handler
         )
-        def process(self, request: TestRequest) -> TestResponse:
+        def process(self, request: SampleRequest) -> SampleResponse:
             raise RuntimeError("Something went wrong")
 
     service = ServiceWithCustomHandler()
@@ -172,10 +172,10 @@ async def test_async_error_handler():
 
     class AsyncServiceWithErrorHandling:
         @error_handler(ValueError, status_code=grpc.StatusCode.OUT_OF_RANGE)
-        async def calculate(self, request: TestRequest) -> TestResponse:
+        async def calculate(self, request: SampleRequest) -> SampleResponse:
             if request.value == "zero":
                 raise ValueError("Cannot divide by zero")
-            return TestResponse(result=f"Result: {request.value}")
+            return SampleResponse(result=f"Result: {request.value}")
 
     service = AsyncServiceWithErrorHandling()
 
@@ -189,9 +189,9 @@ async def test_async_error_handler():
     assert handler["status_code"] == grpc.StatusCode.OUT_OF_RANGE
 
     # Test the actual method still works
-    result = await service.calculate(TestRequest(value="test"))
+    result = await service.calculate(SampleRequest(value="test"))
     assert result.result == "Result: test"
 
     # Test that the exception is still raised (decorator doesn't catch)
     with pytest.raises(ValueError):
-        await service.calculate(TestRequest(value="zero"))
+        await service.calculate(SampleRequest(value="zero"))

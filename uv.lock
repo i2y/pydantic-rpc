@@ -151,16 +151,16 @@ wheels = [
 ]
 
 [[package]]
-name = "connecpy"
-version = "2.2.0"
+name = "connect-python"
+version = "0.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
     { name = "protobuf" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5a/83/e937cf8f76f4e748aebb1124dd80a1ea13edde318250f143f339e892001d/connecpy-2.2.0.tar.gz", hash = "sha256:750ba803c8446a33bc6251207f0875f13a564d9f2fbd7c1ab5f4cf19e9655154", size = 34301, upload-time = "2025-08-15T04:45:52.578Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a9/0b/f4dec6884baca2746602e6ea5694f388f8d32ce01a657e381da04b0d124e/connect_python-0.5.0.tar.gz", hash = "sha256:8d761e8f2fd14dc7854adbb02f2e0a6f22b120db378f3486e55a6e984427d380", size = 36120, upload-time = "2025-09-23T00:52:47.239Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/6c/95/9fe312a22ebbe238d0342dd08a985b2d9bfb95d7a808958b606859a3ebaa/connecpy-2.2.0-py3-none-any.whl", hash = "sha256:770d6b0133507f1937429e17056b7fc2d9589e2ac8a52afa4ea45fd56fd734a5", size = 45032, upload-time = "2025-08-15T04:45:51.367Z" },
+    { url = "https://files.pythonhosted.org/packages/b1/14/49f9748d86a8b4b5805d845978ad4f57e203c28ea40c9839c2b9f0edbc1e/connect_python-0.5.0-py3-none-any.whl", hash = "sha256:71caab21ca3a5458510fbd4e5439c75399bf109498983f05454f0f8160e70fd5", size = 48093, upload-time = "2025-09-23T00:52:45.739Z" },
 ]
 
 [[package]]
@@ -669,6 +669,19 @@ wheels = [
 ]
 
 [[package]]
+name = "protoc-gen-connect-python"
+version = "0.5.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c3/4c/d91c9da9528a8d89274a55ef9aeb8b527b719554bd08319395af9e7c8744/protoc_gen_connect_python-0.5.0-py3-none-macosx_11_0_arm64.whl", hash = "sha256:88d51023af6970aff22568b35cba72d19588a684687005881ec26a53c669a9f3", size = 1824872, upload-time = "2025-09-23T00:52:55.363Z" },
+    { url = "https://files.pythonhosted.org/packages/28/59/23e7830d3054882e727327d25d077af22a98faf6dd10df7e80b40e9c0871/protoc_gen_connect_python-0.5.0-py3-none-macosx_11_0_x86_64.whl", hash = "sha256:44d27293cbadd16dfdb6e9ad0436b8ae6913afe7d0bbbd2ca39b400a1c2b6ebd", size = 1948916, upload-time = "2025-09-23T00:52:57.152Z" },
+    { url = "https://files.pythonhosted.org/packages/73/59/5155a1225663d8626f05e2f6b26f01ac04e3914a7822b78c738632cd876c/protoc_gen_connect_python-0.5.0-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.musllinux_1_1_aarch64.whl", hash = "sha256:9923da8f69c830115add3121f041d63b64cd7ba0dfdf48ece8f8c88164756def", size = 1760034, upload-time = "2025-09-23T00:52:58.461Z" },
+    { url = "https://files.pythonhosted.org/packages/7e/be/9087ec3483731ed68822b3dcd9ffcef112aac7ea6e698900df14400613ea/protoc_gen_connect_python-0.5.0-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.musllinux_1_1_x86_64.whl", hash = "sha256:8004fb93ac9058becbcb83a96f5c89fb83c23a18f14885328f419f83da6d6fb0", size = 1926171, upload-time = "2025-09-23T00:53:00.266Z" },
+    { url = "https://files.pythonhosted.org/packages/08/6f/a7cb2e68132e8999ebdc0ce662e6ccf7d6f4feb0afd02fa8da46523cc2aa/protoc_gen_connect_python-0.5.0-py3-none-win_amd64.whl", hash = "sha256:47c16487bc06ac05217f85203eef64eb65e4a76420154b4e4b902e93e4c83312", size = 1986157, upload-time = "2025-09-23T00:53:01.614Z" },
+    { url = "https://files.pythonhosted.org/packages/1b/73/da7a3f40ed7986d4d89c4fd5e78a043a36248032dc450cd3e1206ad6a3fb/protoc_gen_connect_python-0.5.0-py3-none-win_arm64.whl", hash = "sha256:db11df004a6e7371036636e9be788da4693ddfec330c18c7c166e5ea12a4dd0c", size = 1792089, upload-time = "2025-09-23T00:53:03.013Z" },
+]
+
+[[package]]
 name = "pyasn1"
 version = "0.6.1"
 source = { registry = "https://pypi.org/simple" }
@@ -826,12 +839,13 @@ version = "0.11.0"
 source = { editable = "." }
 dependencies = [
     { name = "annotated-types" },
-    { name = "connecpy" },
+    { name = "connect-python" },
     { name = "grpcio" },
     { name = "grpcio-health-checking" },
     { name = "grpcio-reflection" },
     { name = "grpcio-tools" },
     { name = "mcp" },
+    { name = "protoc-gen-connect-python" },
     { name = "pydantic" },
     { name = "starlette" },
 ]
@@ -848,12 +862,13 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "annotated-types", specifier = "==0.7.0" },
-    { name = "connecpy", specifier = ">=2.2.0" },
+    { name = "connect-python", specifier = ">=0.5.0" },
     { name = "grpcio", specifier = ">=1.56.2" },
     { name = "grpcio-health-checking", specifier = ">=1.56.2" },
     { name = "grpcio-reflection", specifier = ">=1.56.2" },
     { name = "grpcio-tools", specifier = ">=1.56.2" },
     { name = "mcp", specifier = ">=1.9.4" },
+    { name = "protoc-gen-connect-python", specifier = ">=0.1.0" },
     { name = "pydantic", specifier = ">=2.1.1" },
     { name = "starlette", specifier = ">=0.27.0" },
 ]

@@ -88,6 +88,8 @@ async def test_basic_tls():
             assert response.client_identity == "anonymous"  # No client cert
 
     finally:
+        # Stop the server gracefully before cancelling the task
+        await server.stop(grace=0)
         server_task.cancel()
         try:
             await server_task
@@ -147,6 +149,8 @@ async def test_mtls():
             )  # Client CN from certificate
 
     finally:
+        # Stop the server gracefully before cancelling the task
+        await server.stop(grace=0)
         server_task.cancel()
         try:
             await server_task
@@ -200,6 +204,8 @@ async def test_mtls_client_rejection():
             assert exc_info.value.code() == grpc.StatusCode.UNAVAILABLE
 
     finally:
+        # Stop the server gracefully before cancelling the task
+        await server.stop(grace=0)
         server_task.cancel()
         try:
             await server_task
@@ -269,6 +275,8 @@ async def test_multiple_clients_mtls():
             assert response.client_identity == "testclient2"
 
     finally:
+        # Stop the server gracefully before cancelling the task
+        await server.stop(grace=0)
         server_task.cancel()
         try:
             await server_task

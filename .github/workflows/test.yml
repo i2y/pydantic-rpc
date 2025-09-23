@@ -24,8 +24,8 @@ jobs:
           go-version: '1.24'
           cache: true
 
-      - name: Install protoc-gen-connecpy plugin
-        run: go install github.com/i2y/connecpy/v2/protoc-gen-connecpy@v2.2.0
+      - name: Install protoc-gen-connect-python plugin
+        run: pip install protoc-gen-connect-python
 
       - name: Setup uv with cache
         id: setup-uv
