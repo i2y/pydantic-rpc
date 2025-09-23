@@ -460,7 +460,7 @@ wheels = [
 
 [[package]]
 name = "pydantic-rpc"
-version = "0.10.0"
+version = "0.11.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-types" },
@@ -473,14 +473,14 @@ dependencies = [
     { name = "pydantic" },
     { name = "starlette" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/9c/2a/f39b8d0fe022aee1e66dc7e1083e234b318fc0bddfbe3f14659cd478e4d3/pydantic_rpc-0.10.0.tar.gz", hash = "sha256:e74433271fc940d5089dc144545fb4bd0f2605f541f7d14d09546aa684322a64", size = 41177, upload-time = "2025-08-25T03:20:52.285Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/36/e8/2557b1767dfa368f7e9e13fb102eb6bfa30164f0425ce47a4ee6ab097531/pydantic_rpc-0.11.0.tar.gz", hash = "sha256:6779e4d27becd33514f1dfabc9950a85a5b195a212945e2ea80ddedf3825e9d9", size = 44296, upload-time = "2025-09-02T22:59:05.622Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/86/9a/2a8880717544f93b731453f18f8323aab860640043dcf9ecc73a4141ce29/pydantic_rpc-0.10.0-py3-none-any.whl", hash = "sha256:dbc2fd95481880cd0756280a8c7538c0735a3888b472a3a21f333b4aa5587cdd", size = 37731, upload-time = "2025-08-25T03:20:51.093Z" },
+    { url = "https://files.pythonhosted.org/packages/40/aa/754bc6172c2e33e6269b5e4d036b450209505a607ed6866b51f2cee686ba/pydantic_rpc-0.11.0-py3-none-any.whl", hash = "sha256:0da2b095831e19063b8dd18e2dd163bb79d899b729ddd68f6bf6e9fb42b1935f", size = 39034, upload-time = "2025-09-02T22:59:04.787Z" },
 ]
 
 [[package]]
 name = "pydantic-rpc-cli"
-version = "0.11.0"
+version = "0.12.0"
 source = { editable = "." }
 dependencies = [
     { name = "gunicorn" },
@@ -493,7 +493,7 @@ dependencies = [
 requires-dist = [
     { name = "gunicorn", specifier = ">=20.1.0" },
     { name = "hypercorn", specifier = ">=0.17.3" },
-    { name = "pydantic-rpc", specifier = ">=0.10.0" },
+    { name = "pydantic-rpc", specifier = ">=0.11.0" },
     { name = "uvloop", specifier = ">=0.17.0" },
 ]
 
