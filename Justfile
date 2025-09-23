@@ -151,7 +151,7 @@ server-describe-method:
 
 # Run Connect RPC ASGI example (default port 8000)
 greeting-asgi:
-    cd examples && uvicorn greeting_asgi:app --port 8000
+    cd examples && uv run uvicorn greeting_asgi:app --port 8000
 
 # Run Connect RPC WSGI example (default port 3000)
 greeting-wsgi:
