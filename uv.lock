@@ -857,6 +857,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "ruff" },
+    { name = "uvicorn" },
 ]
 
 [package.metadata]
@@ -880,6 +881,7 @@ dev = [
     { name = "pytest", specifier = ">=8.3.4" },
     { name = "pytest-asyncio", specifier = ">=0.20.3" },
     { name = "ruff", specifier = ">=0.9.4" },
+    { name = "uvicorn", specifier = ">=0.34.0" },
 ]
 
 [[package]]
