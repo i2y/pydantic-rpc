@@ -1230,6 +1230,64 @@ class MyMessage(Message):
 
 This approach works because protobuf allows message types within `oneof` fields, and the collections are contained within those messages.
 
+## 🔧 Development
+
+This project uses [`just`](https://github.com/casey/just) as a command runner for development tasks.
+
+### Installing just
+
+**macOS:**
+```bash
+brew install just
+```
+
+**Linux:**
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to ~/bin
+```
+
+**Windows:**
+Download from [GitHub releases](https://github.com/casey/just/releases)
+
+### Quick Start
+
+```bash
+# Install dependencies
+just install
+
+# Run tests
+just test  # or just t
+
+# Format and lint code
+just format  # or just f
+just lint    # or just l
+
+# Run all checks (lint + tests)
+just check   # or just c
+
+# See all available commands
+just --list
+```
+
+### Running Examples
+
+```bash
+# Start servers
+just greeting-server  # gRPC server on port 50051
+just greeting-asgi    # Connect RPC ASGI on port 8000
+just greeting-wsgi    # Connect RPC WSGI on port 3000
+
+# Test with buf curl (in another terminal)
+just greet            # gRPC request
+just connect-greet    # Connect RPC request
+just wsgi-greet       # WSGI request
+
+# Custom names
+just greet-name Alice
+just connect-greet-name Bob
+```
+
+For more development commands and options, see the [Justfile](Justfile) or run `just --list`.
 
 ## TODO
 - [x] Streaming Support
