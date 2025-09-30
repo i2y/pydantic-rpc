@@ -2713,8 +2713,20 @@ class AsyncIOServer:
         package_name: str = "",
         *interceptors: grpc.ServerInterceptor,
         tls: Optional["GrpcTLSConfig"] = None,
+        migration_thread_pool: Optional[futures.ThreadPoolExecutor] = None,
+        handlers: Optional[list[grpc.GenericRpcHandler]] = None,
+        options: Optional[list[tuple[str, Any]]] = None,
+        maximum_concurrent_rpcs: Optional[int] = None,
+        compression: Optional[grpc.Compression] = None,
     ) -> None:
-        self._server: grpc.aio.Server = grpc.aio.server(interceptors=interceptors)
+        self._server: grpc.aio.Server = grpc.aio.server(
+            migration_thread_pool=migration_thread_pool,
+            handlers=handlers,
+            interceptors=interceptors,
+            options=options,
+            maximum_concurrent_rpcs=maximum_concurrent_rpcs,
+            compression=compression,
+        )
         self._service_names: list[str] = []
         self._package_name: str = package_name
         self._port: int = port
