@@ -1,11 +1,13 @@
 from io import BytesIO
 import pytest
 from typing import Any, AsyncIterator
+from concurrent import futures
 
 from pydantic_rpc.core import ASGIApp, WSGIApp
 from pydantic_rpc import Message
 
 import random
+import grpc
 import grpc.aio
 from pydantic_rpc.core import (
     AsyncIOServer,
@@ -303,3 +305,43 @@ async def test_stream_stream_integration():
             assert responses == ["HELLO", "WORLD"]
     finally:
         await server._server.stop(1)
+
+
+@pytest.mark.asyncio
+async def test_asyncio_server_production_parameters():
+    """Test AsyncIOServer constructor with production-ready parameters."""
+    if is_skip_generation():
+        pytest.skip("Skipping generation tests")
+
+    # Test with production parameters
+    thread_pool = futures.ThreadPoolExecutor(max_workers=4)
+    options = [
+        ('grpc.keepalive_time_ms', 10000),
+        ('grpc.keepalive_timeout_ms', 5000),
+        ('grpc.keepalive_permit_without_calls', True),
+    ]
+
+    try:
+        server = AsyncIOServer(
+            migration_thread_pool=thread_pool,
+            options=options,
+            maximum_concurrent_rpcs=100,
+            compression=grpc.Compression.Gzip,
+        )
+
+        # Mount a simple service for testing
+        service = AsyncEchoService()
+        server.mount(service)
+
+        port = random.randint(50000, 60000)
+        _ = server._server.add_insecure_port(f"[::]:{port}")
+        await server._server.start()
+
+        # Simple connectivity test
+        async with grpc.aio.insecure_channel(f"localhost:{port}") as channel:
+            # Just verify the server is running and accessible
+            await channel.channel_ready()
+
+    finally:
+        await server._server.stop(1)
+        thread_pool.shutdown(wait=True)
