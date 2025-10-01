@@ -2713,7 +2713,7 @@ class AsyncIOServer:
         port: int = 50051,
         package_name: str = "",
         tls: Optional["GrpcTLSConfig"] = None,
-        interceptors: Optional[Sequence[Any]] = None,
+        interceptors: Optional[Sequence[grpc.ServerInterceptor]] = None,
         migration_thread_pool: Optional[Executor] = None,
         handlers: Optional[Sequence[grpc.GenericRpcHandler]] = None,
         options: Optional[Sequence[Tuple[str, Any]]] = None,
