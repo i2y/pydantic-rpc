@@ -1,6 +1,9 @@
+import annotated_types
 import asyncio
 import datetime
 import enum
+import grpc
+import grpc_tools
 import importlib.util
 import inspect
 import os
@@ -8,11 +11,19 @@ import signal
 import sys
 import time
 import types
-from typing import Union
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from concurrent import futures
+from connectrpc.code import Code as Errors
+# Protobuf Python modules for Timestamp, Duration (requires protobuf / grpcio)
+from google.protobuf import duration_pb2, timestamp_pb2, empty_pb2
+from grpc import ServicerContext
+from grpc_health.v1 import health_pb2, health_pb2_grpc
+from grpc_health.v1.health import HealthServicer
+from grpc_reflection.v1alpha import reflection
+from grpc_tools import protoc
 from pathlib import Path
 from posixpath import basename
+from pydantic import BaseModel, ValidationError
 from typing import (
     Any,
     Optional,
@@ -22,20 +33,10 @@ from typing import (
     cast,
     TypeGuard,
 )
+from typing import Union
+from typing import Union, Sequence, Tuple
+from concurrent.futures import Executor
 
-import annotated_types
-import grpc
-from grpc import ServicerContext
-import grpc_tools
-from connectrpc.code import Code as Errors
-
-# Protobuf Python modules for Timestamp, Duration (requires protobuf / grpcio)
-from google.protobuf import duration_pb2, timestamp_pb2, empty_pb2
-from grpc_health.v1 import health_pb2, health_pb2_grpc
-from grpc_health.v1.health import HealthServicer
-from grpc_reflection.v1alpha import reflection
-from grpc_tools import protoc
-from pydantic import BaseModel, ValidationError
 from .decorators import get_method_options, has_http_option
 from .tls import GrpcTLSConfig
 
@@ -2711,11 +2712,11 @@ class AsyncIOServer:
         service: Optional[object] = None,
         port: int = 50051,
         package_name: str = "",
-        *interceptors: grpc.ServerInterceptor,
         tls: Optional["GrpcTLSConfig"] = None,
-        migration_thread_pool: Optional[futures.ThreadPoolExecutor] = None,
-        handlers: Optional[list[grpc.GenericRpcHandler]] = None,
-        options: Optional[list[tuple[str, Any]]] = None,
+        interceptors: Optional[Sequence[Any]] = None,
+        migration_thread_pool: Optional[Executor] = None,
+        handlers: Optional[Sequence[grpc.GenericRpcHandler]] = None,
+        options: Optional[Sequence[Tuple[str, Any]]] = None,
         maximum_concurrent_rpcs: Optional[int] = None,
         compression: Optional[grpc.Compression] = None,
     ) -> None:
