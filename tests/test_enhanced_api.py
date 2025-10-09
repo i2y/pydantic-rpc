@@ -195,3 +195,29 @@ async def test_async_error_handler():
     # Test that the exception is still raised (decorator doesn't catch)
     with pytest.raises(ValueError):
         await service.calculate(SampleRequest(value="zero"))
+
+
+def test_server_production_parameters():
+    """Test Server constructor with production-ready parameters."""
+    # Test with production parameters
+    options = [
+        ('grpc.keepalive_time_ms', 10000),
+        ('grpc.keepalive_timeout_ms', 5000),
+        ('grpc.keepalive_permit_without_calls', True),
+    ]
+
+    server = Server(
+        max_workers=10,
+        options=options,
+        maximum_concurrent_rpcs=100,
+        compression=grpc.Compression.Gzip,
+    )
+
+    assert server._server is not None
+    assert server._port == 50051  # default port
+
+    # Test with minimal parameters
+    server2 = Server(
+        max_workers=5,
+    )
+    assert server2._server is not None

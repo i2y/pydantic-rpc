@@ -11,7 +11,7 @@ import signal
 import sys
 import time
 import types
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Sequence
 from concurrent import futures
 from connectrpc.code import Code as Errors
 # Protobuf Python modules for Timestamp, Duration (requires protobuf / grpcio)
@@ -2611,11 +2611,20 @@ class Server:
         port: int = 50051,
         package_name: str = "",
         max_workers: int = 8,
-        *interceptors: Any,
         tls: Optional["GrpcTLSConfig"] = None,
+        interceptors: Optional[Sequence[grpc.ServerInterceptor]] = None,
+        handlers: Optional[Sequence[grpc.GenericRpcHandler]] = None,
+        options: Optional[Sequence[Tuple[str, Any]]] = None,
+        maximum_concurrent_rpcs: Optional[int] = None,
+        compression: Optional[grpc.Compression] = None,
     ) -> None:
         self._server: grpc.Server = grpc.server(
-            futures.ThreadPoolExecutor(max_workers), interceptors=interceptors
+            futures.ThreadPoolExecutor(max_workers),
+            handlers=handlers,
+            interceptors=interceptors,
+            options=options,
+            maximum_concurrent_rpcs=maximum_concurrent_rpcs,
+            compression=compression,
         )
         self._service_names: list[str] = []
         self._package_name: str = package_name

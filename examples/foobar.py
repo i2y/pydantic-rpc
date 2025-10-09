@@ -69,7 +69,7 @@ async def app(scope, receive, send):
 
 
 if __name__ == "__main__":
-    s = Server(10, CustomInterceptor())
+    s = Server(max_workers=10, interceptors=[CustomInterceptor()])
     s.run(
         FooService(),
         BarService(),
