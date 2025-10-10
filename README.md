@@ -107,7 +107,7 @@ app = ASGIApp(service=OlympicsLocationAgent())
   - 🔎 **Server Reflection:** Built-in support for gRPC server reflection.
   - ⚡ **Asynchronous Support:** Easily create asynchronous gRPC services with `AsyncIOServer`.
 - **For Connect-RPC:**
-  - 🌐 **Full Protocol Support:** Native Connect-RPC support via `Connecpy` v2.2.0+
+  - 🌐 **Full Protocol Support:** Native Connect-RPC support via `connect-python`
   - 🔄 **All Streaming Patterns:** Unary, server streaming, client streaming, and bidirectional streaming
   - 🌐 **WSGI/ASGI Applications:** Run as standard WSGI or ASGI applications for easy deployment
 - 🛠️ **Pre-generated Protobuf Files and Code:** Pre-generate proto files and corresponding code via the CLI. By setting the environment variable (PYDANTIC_RPC_SKIP_GENERATION), you can skip runtime generation.
@@ -286,21 +286,21 @@ app.mount(Greeter())
 
 ### 🏆 Connect-RPC with Streaming Example
 
-PydanticRPC provides native Connect-RPC support via Connecpy v2.2.0+, including full streaming capabilities and PEP 8 naming conventions. Check out our ASGI examples:
+PydanticRPC provides native Connect-RPC support via connect-python, including full streaming capabilities and PEP 8 naming conventions. Check out our ASGI examples:
 
 ```bash
 # Run with uvicorn
 uv run uvicorn greeting_asgi:app --port 3000
 
 # Or run streaming example
-uv run python examples/streaming_connecpy.py
+uv run python examples/streaming_connect_python.py
 ```
 
-This will launch a Connecpy-based ASGI application that uses the same Pydantic models to serve Connect-RPC requests.
+This will launch a connect-python-based ASGI application that uses the same Pydantic models to serve Connect-RPC requests.
 
-#### Streaming Support with Connecpy
+#### Streaming Support with connect-python
 
-Connecpy v2.2.0 provides full support for streaming RPCs with automatic PEP 8 naming (snake_case):
+connect-python provides full support for streaming RPCs with automatic PEP 8 naming (snake_case):
 
 ```python
 from typing import AsyncIterator
@@ -341,14 +341,7 @@ app.mount(StreamingService())
 ```
 
 > [!NOTE]
-> Please install `protoc-gen-connecpy` to run the Connecpy example.
->
-> 1. Install Go.
->     - Please follow the instruction described in https://go.dev/doc/install.
-> 2. Install `protoc-gen-connecpy`:
->     ```bash
->     go install github.com/i2y/connecpy/v2/protoc-gen-connecpy@latest
->     ```
+> Please install `protoc-gen-connect-python` to run the connect-python example.
 
 ## ♻️ Skipping Protobuf Generation
 By default, PydanticRPC generates .proto files and code at runtime. If you wish to skip the code-generation step (for example, in production environment), set the environment variable below:
@@ -357,9 +350,9 @@ By default, PydanticRPC generates .proto files and code at runtime. If you wish 
 export PYDANTIC_RPC_SKIP_GENERATION=true
 ```
 
-When this variable is set to "true", PydanticRPC will load existing pre-generated modules rather than generating them on the fly.
+When this variable is set to "true", PydanticRPC will load existing pre-generated modules rather than generating theƒm on the fly.
 
-## 🪧 Setting Protobuf and Connecpy/gRPC generation directory
+## 🪧 Setting Protobuf and Connect RPC/gRPC generation directory
 By default your files will be generated in the current working directory where you ran the code from, but you can set a custom specific directory by setting the environment variable below:
 
 ```bash
