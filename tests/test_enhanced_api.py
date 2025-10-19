@@ -201,9 +201,9 @@ def test_server_production_parameters():
     """Test Server constructor with production-ready parameters."""
     # Test with production parameters
     options = [
-        ('grpc.keepalive_time_ms', 10000),
-        ('grpc.keepalive_timeout_ms', 5000),
-        ('grpc.keepalive_permit_without_calls', True),
+        ("grpc.keepalive_time_ms", 10000),
+        ("grpc.keepalive_timeout_ms", 5000),
+        ("grpc.keepalive_permit_without_calls", True),
     ]
 
     server = Server(

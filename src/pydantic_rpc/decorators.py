@@ -2,6 +2,7 @@
 
 from typing import Any, Callable, Dict, List, Optional, TypeVar, Type
 from functools import wraps
+import inspect
 import grpc
 from connectrpc.code import Code as ConnectErrors
 
@@ -145,7 +146,10 @@ def error_handler(
     exception_type: Type[Exception],
     status_code: Optional[grpc.StatusCode] = None,
     connect_code: Optional[ConnectErrors] = None,
-    handler: Optional[Callable[[Exception], tuple[str, Any]]] = None,
+    handler: Optional[
+        Callable[[Exception], tuple[str, Any]]
+        | Callable[[Exception, Any], tuple[str, Any]]
+    ] = None,
 ) -> Callable[[F], F]:
     """
     Decorator to add automatic error handling to an RPC method.
@@ -154,12 +158,21 @@ def error_handler(
         exception_type: The type of exception to handle
         status_code: The gRPC status code to return (for gRPC services)
         connect_code: The Connect error code to return (for Connect services)
-        handler: Optional custom handler function that returns (message, details)
+        handler: Optional custom handler function that returns (message, details).
+                Can accept either (exception) or (exception, request_data) as parameters.
 
     Example:
         @error_handler(ValidationError, status_code=grpc.StatusCode.INVALID_ARGUMENT)
         @error_handler(KeyError, status_code=grpc.StatusCode.NOT_FOUND)
         async def get_user(self, request: GetUserRequest) -> User:
+            ...
+
+        # With custom handler that accesses request data
+        def validation_handler(exc: ValidationError, request_data: Any) -> tuple[str, dict]:
+            return f"Validation failed for {request_data}", {"errors": exc.errors()}
+
+        @error_handler(ValidationError, handler=validation_handler)
+        async def create_user(self, request: CreateUserRequest) -> User:
             ...
     """
 
@@ -180,18 +193,11 @@ def error_handler(
             }
         )
 
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            return func(*args, **kwargs)
+        # Set the error handlers directly on the function
+        # No need for a wrapper - we're just storing metadata
+        setattr(func, ERROR_HANDLER_ATTR, handlers)
 
-        # Preserve the error handlers on the wrapper
-        setattr(wrapper, ERROR_HANDLER_ATTR, handlers)
-
-        # Preserve any existing option metadata
-        if hasattr(func, OPTION_METADATA_ATTR):
-            setattr(wrapper, OPTION_METADATA_ATTR, getattr(func, OPTION_METADATA_ATTR))
-
-        return wrapper  # type: ignore
+        return func  # type: ignore
 
     return decorator
 
@@ -207,3 +213,31 @@ def get_error_handlers(method: Callable) -> Optional[List[Dict[str, Any]]]:
         List of error handler configurations if present, None otherwise
     """
     return getattr(method, ERROR_HANDLER_ATTR, None)
+
+
+def invoke_error_handler(
+    handler_func: Callable, exception: Exception, request_data: Any = None
+) -> tuple[str, Any]:
+    """
+    Invoke an error handler function with appropriate parameters based on its signature.
+
+    Args:
+        handler_func: The error handler function to invoke
+        exception: The exception that was raised
+        request_data: Optional request data (raw protobuf request)
+
+    Returns:
+        Tuple of (error_message, error_details)
+    """
+    sig = inspect.signature(handler_func)
+    param_count = len(sig.parameters)
+
+    if param_count == 1:
+        # Handler only accepts exception
+        return handler_func(exception)
+    elif param_count == 2:
+        # Handler accepts exception and request_data
+        return handler_func(exception, request_data)
+    else:
+        # Invalid signature, fall back to exception only
+        return handler_func(exception)

@@ -15,6 +15,7 @@ from .decorators import (
     has_http_option,
     error_handler,
     get_error_handlers,
+    invoke_error_handler,
 )
 from .tls import (
     GrpcTLSConfig,
@@ -35,6 +36,7 @@ __all__ = [
     "has_http_option",
     "error_handler",
     "get_error_handlers",
+    "invoke_error_handler",
     "GrpcTLSConfig",
     "extract_peer_identity",
     "extract_peer_certificate_chain",

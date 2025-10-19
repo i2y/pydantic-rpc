@@ -316,9 +316,9 @@ async def test_asyncio_server_production_parameters():
     # Test with production parameters
     thread_pool = futures.ThreadPoolExecutor(max_workers=4)
     options = [
-        ('grpc.keepalive_time_ms', 10000),
-        ('grpc.keepalive_timeout_ms', 5000),
-        ('grpc.keepalive_permit_without_calls', True),
+        ("grpc.keepalive_time_ms", 10000),
+        ("grpc.keepalive_timeout_ms", 5000),
+        ("grpc.keepalive_permit_without_calls", True),
     ]
 
     try:
