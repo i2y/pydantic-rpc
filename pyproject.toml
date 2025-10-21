@@ -1,6 +1,6 @@
 [project]
 name = "pydantic-rpc"
-version = "0.14.0"
+version = "0.15.0"
 description = "A Python library for building gRPC/ConnectRPC services with Pydantic models."
 authors = [
     { name = "Yasushi Itoh" }
