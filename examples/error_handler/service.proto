@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package examples.error_handler.v1;
+
+// Service for managing users with custom error handling.
+service UserService {
+    // Create a new user.
+    //
+    // This method uses @error_handler to customize validation error responses.
+    // If the request fails validation, the custom handler will be called
+    // with access to both the ValidationError and the raw request data.
+    rpc CreateUser (UserRequest) returns (UserResponse);
+    // Delete a user.
+    //
+    // This method does NOT use @error_handler, so validation errors
+    // will be handled with the default behavior.
+    rpc DeleteUser (UserRequest) returns (UserResponse);
+    // Update an existing user.
+    //
+    // This method uses @error_handler with default error handling
+    // (no custom handler function).
+    rpc UpdateUser (UserRequest) returns (UserResponse);
+}
+
+// User response message.
+message UserResponse {
+    string message = 1;
+    int32 user_id = 2;
+}
+
+// User request with validation rules.
+message UserRequest {
+    string name = 1;
+    int32 age = 2;
+    string email = 3;
+}
+

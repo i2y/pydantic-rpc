@@ -14,6 +14,8 @@ import types
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Sequence
 from concurrent import futures
 from connectrpc.code import Code as Errors
+from connectrpc.errors import ConnectError
+
 # Protobuf Python modules for Timestamp, Duration (requires protobuf / grpcio)
 from google.protobuf import duration_pb2, timestamp_pb2, empty_pb2
 from grpc import ServicerContext
@@ -32,12 +34,17 @@ from typing import (
     get_origin,
     cast,
     TypeGuard,
+    Union,
+    Tuple,
 )
-from typing import Union
-from typing import Union, Sequence, Tuple
 from concurrent.futures import Executor
 
-from .decorators import get_method_options, has_http_option
+from .decorators import (
+    get_method_options,
+    has_http_option,
+    get_error_handlers,
+    invoke_error_handler,
+)
 from .tls import GrpcTLSConfig
 
 ###############################################################################
@@ -309,6 +316,116 @@ def generate_message_converter(
     return converter
 
 
+def handle_validation_error_sync(
+    exc: ValidationError,
+    method: Callable,
+    context: Any,
+    request: Any = None,
+    is_grpc: bool = True,
+) -> Any:
+    """
+    Handle ValidationError with custom error handlers or default behavior (sync version).
+
+    Args:
+        exc: The ValidationError that was raised
+        method: The RPC method being called
+        context: The gRPC or Connect context
+        request: Optional raw request data
+        is_grpc: True for gRPC, False for Connect RPC
+
+    Returns:
+        Result of context.abort() call
+    """
+    error_handlers = get_error_handlers(method)
+
+    if error_handlers:
+        # Check if there's a handler for ValidationError
+        for handler_config in error_handlers:
+            if isinstance(exc, handler_config["exception_type"]):
+                if handler_config["handler"]:
+                    # Custom handler function
+                    try:
+                        msg, _details = invoke_error_handler(
+                            handler_config["handler"], exc, request
+                        )
+                    except Exception:
+                        # Handler failed, fall back to default
+                        msg = str(exc)
+                else:
+                    # No custom handler, use default message
+                    msg = str(exc)
+
+                # Use the configured status code
+                if is_grpc:
+                    status_code = handler_config["status_code"]
+                    return context.abort(status_code, msg)
+                else:
+                    status_code = handler_config["connect_code"]
+                    raise ConnectError(code=status_code, message=msg)
+
+    # No handler found, use default behavior
+    if is_grpc:
+        return context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+    else:
+        raise ConnectError(code=Errors.INVALID_ARGUMENT, message=str(exc))
+
+
+async def handle_validation_error_async(
+    exc: ValidationError,
+    method: Callable,
+    context: Any,
+    request: Any = None,
+    is_grpc: bool = True,
+) -> Any:
+    """
+    Handle ValidationError with custom error handlers or default behavior (async version).
+
+    Args:
+        exc: The ValidationError that was raised
+        method: The RPC method being called
+        context: The gRPC or Connect context
+        request: Optional raw request data
+        is_grpc: True for gRPC, False for Connect RPC
+
+    Returns:
+        Result of context.abort() call
+    """
+    error_handlers = get_error_handlers(method)
+
+    if error_handlers:
+        # Check if there's a handler for ValidationError
+        for handler_config in error_handlers:
+            if isinstance(exc, handler_config["exception_type"]):
+                # Found a matching handler
+                if handler_config["handler"]:
+                    # Custom handler function
+                    try:
+                        msg, _details = invoke_error_handler(
+                            handler_config["handler"], exc, request
+                        )
+                    except Exception:
+                        # Handler failed, fall back to default
+                        msg = str(exc)
+                else:
+                    # No custom handler, use default message
+                    msg = str(exc)
+
+                # Use the configured status code
+                if is_grpc:
+                    status_code = handler_config["status_code"]
+                    await context.abort(status_code, msg)
+                    return
+                else:
+                    status_code = handler_config["connect_code"]
+                    raise ConnectError(code=status_code, message=msg)
+
+    # No handler found, use default behavior
+    if is_grpc:
+        await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+    else:
+        raise ConnectError(code=Errors.INVALID_ARGUMENT, message=str(exc))
+
+
 def python_value_to_proto_value(field_type: type[Any], value: Any) -> Any:
     """
     Converts Python values to protobuf values.
@@ -394,7 +511,9 @@ def connect_obj_with_stub(
                             resp_obj, response_type, pb2_module
                         )
                 except ValidationError as e:
-                    return context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(e))
+                    return handle_validation_error_sync(
+                        e, original, context, request, is_grpc=True
+                    )
                 except Exception as e:
                     return context.abort(grpc.StatusCode.INTERNAL, str(e))
 
@@ -431,7 +550,9 @@ def connect_obj_with_stub(
                             resp_obj, response_type, pb2_module
                         )
                 except ValidationError as e:
-                    return context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(e))
+                    return handle_validation_error_sync(
+                        e, original, context, request, is_grpc=True
+                    )
                 except Exception as e:
                     return context.abort(grpc.StatusCode.INTERNAL, str(e))
 
@@ -513,8 +634,8 @@ def connect_obj_with_stub_async(
                                     resp_obj, output_item_type, pb2_module
                                 )
                         except ValidationError as e:
-                            await context.abort(
-                                grpc.StatusCode.INVALID_ARGUMENT, str(e)
+                            await handle_validation_error_async(
+                                e, method, context, None, is_grpc=True
                             )
                         except Exception as e:
                             await context.abort(grpc.StatusCode.INTERNAL, str(e))
@@ -534,8 +655,8 @@ def connect_obj_with_stub_async(
                                     resp_obj, output_item_type, pb2_module
                                 )
                         except ValidationError as e:
-                            await context.abort(
-                                grpc.StatusCode.INVALID_ARGUMENT, str(e)
+                            await handle_validation_error_async(
+                                e, method, context, None, is_grpc=True
                             )
                         except Exception as e:
                             await context.abort(grpc.StatusCode.INTERNAL, str(e))
@@ -559,8 +680,8 @@ def connect_obj_with_stub_async(
                                 resp_obj, response_type, pb2_module
                             )
                         except ValidationError as e:
-                            await context.abort(
-                                grpc.StatusCode.INVALID_ARGUMENT, str(e)
+                            await handle_validation_error_async(
+                                e, method, context, None, is_grpc=True
                             )
                         except Exception as e:
                             await context.abort(grpc.StatusCode.INTERNAL, str(e))
@@ -580,8 +701,8 @@ def connect_obj_with_stub_async(
                                 resp_obj, response_type, pb2_module
                             )
                         except ValidationError as e:
-                            await context.abort(
-                                grpc.StatusCode.INVALID_ARGUMENT, str(e)
+                            await handle_validation_error_async(
+                                e, method, context, None, is_grpc=True
                             )
                         except Exception as e:
                             await context.abort(grpc.StatusCode.INTERNAL, str(e))
@@ -611,8 +732,8 @@ def connect_obj_with_stub_async(
                                     resp_obj, output_item_type, pb2_module
                                 )
                         except ValidationError as e:
-                            await context.abort(
-                                grpc.StatusCode.INVALID_ARGUMENT, str(e)
+                            await handle_validation_error_async(
+                                e, method, context, request, is_grpc=True
                             )
                         except Exception as e:
                             await context.abort(grpc.StatusCode.INTERNAL, str(e))
@@ -632,8 +753,8 @@ def connect_obj_with_stub_async(
                                     resp_obj, output_item_type, pb2_module
                                 )
                         except ValidationError as e:
-                            await context.abort(
-                                grpc.StatusCode.INVALID_ARGUMENT, str(e)
+                            await handle_validation_error_async(
+                                e, method, context, request, is_grpc=True
                             )
                         except Exception as e:
                             await context.abort(grpc.StatusCode.INTERNAL, str(e))
@@ -674,8 +795,8 @@ def connect_obj_with_stub_async(
                                     resp_obj, response_type, pb2_module
                                 )
                         except ValidationError as e:
-                            await context.abort(
-                                grpc.StatusCode.INVALID_ARGUMENT, str(e)
+                            await handle_validation_error_async(
+                                e, method, context, request, is_grpc=True
                             )
                         except Exception as e:
                             await context.abort(grpc.StatusCode.INTERNAL, str(e))
@@ -709,8 +830,8 @@ def connect_obj_with_stub_async(
                                     resp_obj, response_type, pb2_module
                                 )
                         except ValidationError as e:
-                            await context.abort(
-                                grpc.StatusCode.INVALID_ARGUMENT, str(e)
+                            await handle_validation_error_async(
+                                e, method, context, request, is_grpc=True
                             )
                         except Exception as e:
                             await context.abort(grpc.StatusCode.INTERNAL, str(e))
@@ -769,9 +890,11 @@ def connect_obj_with_stub_connect_python(
                                 resp_obj, response_type, pb2_module
                             )
                     except ValidationError as e:
-                        return context.abort(Errors.INVALID_ARGUMENT, str(e))
+                        return handle_validation_error_sync(
+                            e, method, context, request, is_grpc=False
+                        )
                     except Exception as e:
-                        return context.abort(Errors.INTERNAL, str(e))
+                        raise ConnectError(code=Errors.INTERNAL, message=str(e))
 
                 return stub_method0
 
@@ -798,9 +921,11 @@ def connect_obj_with_stub_connect_python(
                                 resp_obj, response_type, pb2_module
                             )
                     except ValidationError as e:
-                        return context.abort(Errors.INVALID_ARGUMENT, str(e))
+                        return handle_validation_error_sync(
+                            e, method, context, request, is_grpc=False
+                        )
                     except Exception as e:
-                        return context.abort(Errors.INTERNAL, str(e))
+                        raise ConnectError(code=Errors.INTERNAL, message=str(e))
 
                 return stub_method1
 
@@ -827,9 +952,11 @@ def connect_obj_with_stub_connect_python(
                                 resp_obj, response_type, pb2_module
                             )
                     except ValidationError as e:
-                        return context.abort(Errors.INVALID_ARGUMENT, str(e))
+                        return handle_validation_error_sync(
+                            e, method, context, request, is_grpc=False
+                        )
                     except Exception as e:
-                        return context.abort(Errors.INTERNAL, str(e))
+                        raise ConnectError(code=Errors.INTERNAL, message=str(e))
 
                 return stub_method2
 
@@ -889,9 +1016,11 @@ def connect_obj_with_stub_async_connect_python(
                                 resp_obj, response_type, pb2_module
                             )
                     except ValidationError as e:
-                        await context.abort(Errors.INVALID_ARGUMENT, str(e))
+                        await handle_validation_error_async(
+                            e, method, context, request, is_grpc=False
+                        )
                     except Exception as e:
-                        await context.abort(Errors.INTERNAL, str(e))
+                        raise ConnectError(code=Errors.INTERNAL, message=str(e))
 
                 return stub_method0
 
@@ -931,9 +1060,11 @@ def connect_obj_with_stub_async_connect_python(
                                             resp_obj, output_item_type, pb2_module
                                         )
                                 except ValidationError as e:
-                                    await context.abort(Errors.INVALID_ARGUMENT, str(e))
+                                    await handle_validation_error_async(
+                                        e, method, context, None, is_grpc=False
+                                    )
                                 except Exception as e:
-                                    await context.abort(Errors.INTERNAL, str(e))
+                                    raise ConnectError(code=Errors.INTERNAL, message=str(e))
                         else:  # size_of_parameters == 2
 
                             async def stub_method(
@@ -949,9 +1080,11 @@ def connect_obj_with_stub_async_connect_python(
                                             resp_obj, output_item_type, pb2_module
                                         )
                                 except ValidationError as e:
-                                    await context.abort(Errors.INVALID_ARGUMENT, str(e))
+                                    await handle_validation_error_async(
+                                        e, method, context, None, is_grpc=False
+                                    )
                                 except Exception as e:
-                                    await context.abort(Errors.INTERNAL, str(e))
+                                    raise ConnectError(code=Errors.INTERNAL, message=str(e))
 
                         return stub_method
                     else:
@@ -973,9 +1106,11 @@ def connect_obj_with_stub_async_connect_python(
                                         resp_obj, response_type, pb2_module
                                     )
                                 except ValidationError as e:
-                                    await context.abort(Errors.INVALID_ARGUMENT, str(e))
+                                    await handle_validation_error_async(
+                                        e, method, context, None, is_grpc=False
+                                    )
                                 except Exception as e:
-                                    await context.abort(Errors.INTERNAL, str(e))
+                                    raise ConnectError(code=Errors.INTERNAL, message=str(e))
                         else:  # size_of_parameters == 2
 
                             async def stub_method(
@@ -993,9 +1128,11 @@ def connect_obj_with_stub_async_connect_python(
                                         resp_obj, response_type, pb2_module
                                     )
                                 except ValidationError as e:
-                                    await context.abort(Errors.INVALID_ARGUMENT, str(e))
+                                    await handle_validation_error_async(
+                                        e, method, context, None, is_grpc=False
+                                    )
                                 except Exception as e:
-                                    await context.abort(Errors.INTERNAL, str(e))
+                                    raise ConnectError(code=Errors.INTERNAL, message=str(e))
 
                         return stub_method
                 else:
@@ -1024,9 +1161,11 @@ def connect_obj_with_stub_async_connect_python(
                                             resp_obj, output_item_type, pb2_module
                                         )
                                 except ValidationError as e:
-                                    await context.abort(Errors.INVALID_ARGUMENT, str(e))
+                                    await handle_validation_error_async(
+                                        e, method, context, request, is_grpc=False
+                                    )
                                 except Exception as e:
-                                    await context.abort(Errors.INTERNAL, str(e))
+                                    raise ConnectError(code=Errors.INTERNAL, message=str(e))
                         else:  # size_of_parameters == 2
 
                             async def stub_method(
@@ -1045,9 +1184,11 @@ def connect_obj_with_stub_async_connect_python(
                                             resp_obj, output_item_type, pb2_module
                                         )
                                 except ValidationError as e:
-                                    await context.abort(Errors.INVALID_ARGUMENT, str(e))
+                                    await handle_validation_error_async(
+                                        e, method, context, request, is_grpc=False
+                                    )
                                 except Exception as e:
-                                    await context.abort(Errors.INTERNAL, str(e))
+                                    raise ConnectError(code=Errors.INTERNAL, message=str(e))
 
                         return stub_method
                     else:
@@ -1074,9 +1215,11 @@ def connect_obj_with_stub_async_connect_python(
                                             resp_obj, response_type, pb2_module
                                         )
                                 except ValidationError as e:
-                                    await context.abort(Errors.INVALID_ARGUMENT, str(e))
+                                    await handle_validation_error_async(
+                                        e, method, context, request, is_grpc=False
+                                    )
                                 except Exception as e:
-                                    await context.abort(Errors.INTERNAL, str(e))
+                                    raise ConnectError(code=Errors.INTERNAL, message=str(e))
                         else:  # size_of_parameters == 2
 
                             async def stub_method(
@@ -1099,9 +1242,11 @@ def connect_obj_with_stub_async_connect_python(
                                             resp_obj, response_type, pb2_module
                                         )
                                 except ValidationError as e:
-                                    await context.abort(Errors.INVALID_ARGUMENT, str(e))
+                                    await handle_validation_error_async(
+                                        e, method, context, request, is_grpc=False
+                                    )
                                 except Exception as e:
-                                    await context.abort(Errors.INTERNAL, str(e))
+                                    raise ConnectError(code=Errors.INTERNAL, message=str(e))
 
                         return stub_method
 

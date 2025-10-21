@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package examples.error_handler.v1;
+
+// Synchronous service for managing users with custom error handling.
+service UserService {
+    // Create a new user (synchronous).
+    //
+    // This method uses @error_handler to customize validation error responses.
+    rpc CreateUser (UserRequest) returns (UserResponse);
+    // Delete a user (synchronous).
+    //
+    // No @error_handler - uses default behavior.
+    rpc DeleteUser (UserRequest) returns (UserResponse);
+    // Update an existing user (synchronous).
+    //
+    // Uses @error_handler with default error handling.
+    rpc UpdateUser (UserRequest) returns (UserResponse);
+}
+
+// User response message.
+message UserResponse {
+    string message = 1;
+    int32 user_id = 2;
+}
+
+// User request with validation rules.
+message UserRequest {
+    string name = 1;
+    int32 age = 2;
+    string email = 3;
+}
+
