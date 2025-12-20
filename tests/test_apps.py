@@ -347,11 +347,6 @@ async def test_asyncio_server_production_parameters():
         thread_pool.shutdown(wait=True)
 
 
-# =============================================================================
-# Regression tests for AsyncIOServer shutdown (Issue #51)
-# =============================================================================
-
-
 def test_asyncio_server_shutdown_uses_threadsafe():
     """Shutdown handler must use call_soon_threadsafe.
     This test ensures that the AsyncIOServer.run() method uses
@@ -370,7 +365,7 @@ def test_asyncio_server_shutdown_uses_threadsafe():
 @pytest.mark.asyncio
 @pytest.mark.skipif(
     __import__("sys").platform == "win32",
-    reason="Signal handling test not supported on Windows"
+    reason="Signal handling test not supported on Windows",
 )
 async def test_asyncio_server_shutdown_with_signal():
     """Integration test: server must shutdown cleanly on SIGINT.
@@ -387,7 +382,7 @@ async def test_asyncio_server_shutdown_with_signal():
         pytest.skip("Skipping generation tests")
 
     # Server code to run in subprocess
-    server_code = '''
+    server_code = """
 import asyncio
 from pydantic_rpc import AsyncIOServer, Message
 
@@ -406,7 +401,7 @@ async def main():
     await server.run(TestService())
 
 asyncio.run(main())
-'''
+"""
 
     # Start server in subprocess
     proc = subprocess.Popen(
@@ -431,6 +426,4 @@ asyncio.run(main())
     except subprocess.TimeoutExpired:
         proc.kill()
         proc.wait()
-        pytest.fail(
-            "Server did not shutdown within 15 seconds after SIGINT. "
-        )
+        pytest.fail("Server did not shutdown within 15 seconds after SIGINT. ")

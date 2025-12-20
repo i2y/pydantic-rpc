@@ -1064,7 +1064,9 @@ def connect_obj_with_stub_async_connect_python(
                                         e, method, context, None, is_grpc=False
                                     )
                                 except Exception as e:
-                                    raise ConnectError(code=Errors.INTERNAL, message=str(e))
+                                    raise ConnectError(
+                                        code=Errors.INTERNAL, message=str(e)
+                                    )
                         else:  # size_of_parameters == 2
 
                             async def stub_method(
@@ -1084,7 +1086,9 @@ def connect_obj_with_stub_async_connect_python(
                                         e, method, context, None, is_grpc=False
                                     )
                                 except Exception as e:
-                                    raise ConnectError(code=Errors.INTERNAL, message=str(e))
+                                    raise ConnectError(
+                                        code=Errors.INTERNAL, message=str(e)
+                                    )
 
                         return stub_method
                     else:
@@ -1110,7 +1114,9 @@ def connect_obj_with_stub_async_connect_python(
                                         e, method, context, None, is_grpc=False
                                     )
                                 except Exception as e:
-                                    raise ConnectError(code=Errors.INTERNAL, message=str(e))
+                                    raise ConnectError(
+                                        code=Errors.INTERNAL, message=str(e)
+                                    )
                         else:  # size_of_parameters == 2
 
                             async def stub_method(
@@ -1132,7 +1138,9 @@ def connect_obj_with_stub_async_connect_python(
                                         e, method, context, None, is_grpc=False
                                     )
                                 except Exception as e:
-                                    raise ConnectError(code=Errors.INTERNAL, message=str(e))
+                                    raise ConnectError(
+                                        code=Errors.INTERNAL, message=str(e)
+                                    )
 
                         return stub_method
                 else:
@@ -1165,7 +1173,9 @@ def connect_obj_with_stub_async_connect_python(
                                         e, method, context, request, is_grpc=False
                                     )
                                 except Exception as e:
-                                    raise ConnectError(code=Errors.INTERNAL, message=str(e))
+                                    raise ConnectError(
+                                        code=Errors.INTERNAL, message=str(e)
+                                    )
                         else:  # size_of_parameters == 2
 
                             async def stub_method(
@@ -1188,7 +1198,9 @@ def connect_obj_with_stub_async_connect_python(
                                         e, method, context, request, is_grpc=False
                                     )
                                 except Exception as e:
-                                    raise ConnectError(code=Errors.INTERNAL, message=str(e))
+                                    raise ConnectError(
+                                        code=Errors.INTERNAL, message=str(e)
+                                    )
 
                         return stub_method
                     else:
@@ -1219,7 +1231,9 @@ def connect_obj_with_stub_async_connect_python(
                                         e, method, context, request, is_grpc=False
                                     )
                                 except Exception as e:
-                                    raise ConnectError(code=Errors.INTERNAL, message=str(e))
+                                    raise ConnectError(
+                                        code=Errors.INTERNAL, message=str(e)
+                                    )
                         else:  # size_of_parameters == 2
 
                             async def stub_method(
@@ -1246,7 +1260,9 @@ def connect_obj_with_stub_async_connect_python(
                                         e, method, context, request, is_grpc=False
                                     )
                                 except Exception as e:
-                                    raise ConnectError(code=Errors.INTERNAL, message=str(e))
+                                    raise ConnectError(
+                                        code=Errors.INTERNAL, message=str(e)
+                                    )
 
                         return stub_method
 
