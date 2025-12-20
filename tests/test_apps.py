@@ -345,3 +345,85 @@ async def test_asyncio_server_production_parameters():
     finally:
         await server._server.stop(1)
         thread_pool.shutdown(wait=True)
+
+
+def test_asyncio_server_shutdown_uses_threadsafe():
+    """Shutdown handler must use call_soon_threadsafe.
+    This test ensures that the AsyncIOServer.run() method uses
+    call_soon_threadsafe for signal handling to avoid shutdown hangs.
+    """
+    import inspect
+
+    source = inspect.getsource(AsyncIOServer.run)
+    assert "call_soon_threadsafe" in source, (
+        "AsyncIOServer.run() must use call_soon_threadsafe for signal handling. "
+        "This fix was added in PR #12 and must not be removed. "
+        "See Issue #51 for details."
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(
+    __import__("sys").platform == "win32",
+    reason="Signal handling test not supported on Windows",
+)
+async def test_asyncio_server_shutdown_with_signal():
+    """Integration test: server must shutdown cleanly on SIGINT.
+
+    This test verifies that the AsyncIOServer properly handles shutdown signals
+    without hanging. It starts a server in a subprocess and sends SIGINT.
+    """
+    import subprocess
+    import sys
+    import signal
+    import time
+
+    if is_skip_generation():
+        pytest.skip("Skipping generation tests")
+
+    # Server code to run in subprocess
+    server_code = """
+import asyncio
+from pydantic_rpc import AsyncIOServer, Message
+
+class Req(Message):
+    name: str
+
+class Resp(Message):
+    message: str
+
+class TestService:
+    async def greet(self, req: Req) -> Resp:
+        return Resp(message=f"Hello, {req.name}")
+
+async def main():
+    server = AsyncIOServer(port=59999)
+    await server.run(TestService())
+
+asyncio.run(main())
+"""
+
+    # Start server in subprocess
+    proc = subprocess.Popen(
+        [sys.executable, "-c", server_code],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+    try:
+        # Wait for server to start
+        time.sleep(3)
+
+        # Send SIGINT
+        proc.send_signal(signal.SIGINT)
+
+        # Server should shutdown within 15 seconds (10s grace period + buffer)
+        proc.wait(timeout=15)
+
+        # Check that it exited (any exit is fine, just not hanging)
+        assert proc.returncode is not None, "Server process should have exited"
+
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+        pytest.fail("Server did not shutdown within 15 seconds after SIGINT. ")
