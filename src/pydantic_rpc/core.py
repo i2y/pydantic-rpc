@@ -2956,12 +2956,13 @@ class AsyncIOServer:
         await self._server.start()
 
         shutdown_event = asyncio.Event()
+        loop = asyncio.get_running_loop()
 
         def shutdown(signum: signal.Signals, frame: Any):
             _ = signum
             _ = frame
             print("Received shutdown signal...")
-            shutdown_event.set()
+            loop.call_soon_threadsafe(shutdown_event.set)
 
         for s in [signal.SIGTERM, signal.SIGINT]:
             _ = signal.signal(s, shutdown)  # pyright:ignore[reportArgumentType]
