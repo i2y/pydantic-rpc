@@ -1,12 +1,12 @@
 [project]
 name = "pydantic-rpc-cli"
-version = "0.15.1"
+version = "0.15.2"
 description = "CLI tool for pydantic-rpc with server runtime support"
 authors = [
     { name = "Yasushi Itoh" }
 ]
 dependencies = [
-    "pydantic-rpc>=0.15.1",
+    "pydantic-rpc>=0.15.2",
     "hypercorn>=0.17.3",
     "gunicorn>=20.1.0",
     "uvloop>=0.17.0",  # Optional performance improvement for asyncio
