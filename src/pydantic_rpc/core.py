@@ -565,8 +565,6 @@ def connect_obj_with_stub(
 
     # Attach all RPC methods from service_obj to the concrete servicer
     for method_name, method in get_rpc_methods(service_obj):
-        if method_name.startswith("_"):
-            continue
         setattr(ConcreteServiceClass, method_name, implement_stub_method(method))
 
     return ConcreteServiceClass
@@ -2326,7 +2324,7 @@ def get_rpc_methods(obj: object) -> list[tuple[str, Callable[..., Any]]]:
     return [
         (to_pascal_case(attr_name), getattr(obj, attr_name))
         for attr_name in dir(obj)
-        if inspect.ismethod(getattr(obj, attr_name))
+        if inspect.ismethod(getattr(obj, attr_name)) and not attr_name.startswith('_')
     ]
 
 
